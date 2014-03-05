@@ -1,203 +1,284 @@
 #include <stdio.h>
-#include <sqlite3.h>
 #include <stdlib.h>
 #include <getopt.h>
+#include <string.h>
+#include <uuid/uuid.h>
+#include <sqlite3.h>
 
 #include <map>
-#include <stack>
+#include <vector>
 #include <string>
 
 #include "t0.h"
 
 using namespace std;
 
-op_t::op_t(struct pos_t *owner, int date, int di, int count, int price)
-{
-    this->owner = owner;
-    this->date = date;
-    this->di = di;
-    this->count = count;
-    this->price = price;
-    memcpy(p_uuid, owner->uuid, sizeof(uuid));
+static sqlite3 *g_db;
 
-    uuid_generate(uuid);
-    fee1 = price * count * FEE1_RATIO;
+COperation::COperation(CPos *owner, int date, int di, int count, int price)
+{
+    m_owner = owner;
+    m_date = date;
+    m_di = di;
+    m_count = count;
+    m_price = price;
+
+    m_id = owner->get_next_opid();
+    m_fee1 = price * count * FEE1_RATIO;
     if (di == DI_SELL)
-        fee2 = price * count * FEE2_RATIO;
+        m_fee2 = price * count * FEE2_RATIO;
     else
-        fee2 = 0;
+        m_fee2 = 0;
 
-    fee4 = fee3 = 0;
-    fee = get_fee();
+    m_fee4 = m_fee3 = 0;
+    m_fee = get_fee();
 }
 
-int op_t::get_fee()
+int COperation::get_fee()
 {
-    return (fee1 + fee2 + fee3 + fee4);
+    return (m_fee1 + m_fee2 + m_fee3 + m_fee4);
 }
 
-pos_t:: pos_t(stock_t *owner, int begin_date, int count, int cost, \
-            float cpr, float t0_cpr, float t0_bpr, \
-            float t0_bcr) //for main pos
+CPos:: CPos(CStock *owner, int begin_date, int count, int cost, int clear_price)
 {
-    this->owner = owner;
-    this->begin_date = begin_date;
-    this->end_date = 0;
-    init_count = curr_count = count;
-    init_cost = curr_cost = cost;
-    status = ST_OPEN;
-    mpos_flag = 1;
-    this->cpr = cpr;
-    this->bpr = 0; //main pos MUST NOT buy... only sell and clear
-    this->t0_cpr = t0_cpr;
-    this->t0_bpr = t0_bpr;
-    this->t0_bcr = t0_bcr;
+    m_owner = owner;
+    m_begin_date = begin_date;
+    m_end_date = 0;
+    m_init_count = m_curr_count = count;
+    m_init_cost = m_curr_cost = cost;
+    m_status = ST_OPEN;
+    m_clear_price = clear_price;
 
-    op_t *op = new op_t(this, begin_date, DI_BUY, count,  price, cost);
-    ops[begin_date] = op;
-    profit.fee = op->get_fee();
+    m_t0_cpr = 1 + 0.05; //the base value is dynamic(day line), so there is only a rate
+    m_t0_bpr = 1 - 0.05;
+    m_t0_bcr = 0.5;
+
+    COperation *op = new COperation(this, begin_date, DI_BUY, count, cost);
+    m_ops[begin_date] = op;
+    m_fix_profit.fee = op->get_fee();
 }
 
-//t0 pos can only create by this interface
-tpos_t *pos_t::create_tpos(day_price_t& dp)
+int CPos::_clear_pos(int date, int price)
 {
-    pos_t *t0 = new pos_t;
-    t0->owner = owner;
-    t0->begin_date = dp.date;
-    t0->end_date = 0;
-    t0->init_count = curr_count = (int)((float)count * t0_bcr);
-    t0->init_cost = curr_cost = dp->price;
-    t0->status = ST_OPEN;
-    t0->mpos_flag = this.mpos_flag--;
-    assert(t0->mpos_flag > -1); //a t0 pos can create a child t0 pos at most
-    if (mpos_flag = 1){ //main pos
-        t0->cpr = t0_cpr;
-        t0->bpr = t0_bpr;
-        t0->init_count = curr_count = (int)((float)count * t0_bcr);
-    }else if (mpos_flag = 0){ //t0 pos
-        t0->cpr = cpr;
-        t0->bpr = bpr;
-        t0->init_count = curr_count = this->count;
-    }else
-        assert(0);
+    assert(m_status == ST_OPEN);
+    assert(date >= m_begin_date && m_end_date == 0);
 
-    op_t *op = new op_t(begin_date, DI_BUY, cost);
+    m_status = ST_CLOSE;
+    m_end_date = date;
+    m_curr_cost = price;
+    if (price < m_clear_price)
+        INFO("INFO: pos_id:%lld Not reach target to clear. target price:%d, exec price:%d\n",
+                m_id, m_clear_price, price);
 
-    t0->ops[begin_date] = op;
-    t0->profit.fee = op->get_fee();
+    COperation *op = new COperation(this, date, DI_SELL, m_curr_count, price);
+
+    m_ops[date] = op;
+    assert(m_init_count == m_curr_count); //we only support buy and sell whole pos once a time
+
+    //we get fix_profit now
+    profit_t *p = &m_fix_profit;
+    p->fee += op->get_fee();
+    p->float_profit = 0;
+    p->cash_profit = m_curr_count * (m_curr_cost - m_init_count);
+    p->total_profit = p->cash_profit - p->fee;
+
+    return p->total_profit;
+}
+
+int CPos::_account_pos(int date)
+{
+    assert(m_status == ST_OPEN);
+    assert(date >= m_begin_date && (date <= m_end_date || m_end_date == 0));
+
+    int price = get_close_price(m_owner->get_sn(), date);
+    return m_curr_count * (price - m_curr_cost) - m_fix_profit.fee;
+}
+
+int CPos::_get_profit(int date)
+{
+    if (date < m_begin_date)
+        return 0; //we don't distinguish this case and the real float/fix profit is zero
+
+    if (m_end_date != 0 && date >= m_end_date){
+        assert(m_status == ST_CLOSE);
+        return m_fix_profit.total_profit;
+    }
+
+    if (m_status == ST_CLOSE)
+        return m_fix_profit.total_profit;
+    else
+        return _account_pos(date);
+}
+
+void CPos::_print_profit(int date)
+{
+    if (date < m_begin_date)
+        return;
+
+    printf("id, type, status, begin_date, end_date, profit\n");
+    printf("%lld,%d,%d,%d,%d,%d\n", \
+            m_id, m_type, m_status, m_begin_date, m_end_date, _get_profit(date));
+}
+
+CPosMaster::CPosMaster(CStock *owner, int begin_date, int count, int cost, int  clear_price)
+:CPos(owner, begin_date, count, cost, clear_price)
+{
+    m_id = owner->get_next_mposid(begin_date);
+    m_type = ENUM_MPOS;
+}
+
+void CPosMaster::print_profit(int date)
+{
+    printf("\n================\n");
+    printf("date: %d\n", date);
+    printf("================\n");
+
+    _print_profit(date);
+
+    foreach_itt(itt, &m_tpos)
+        itt->second->print_profit(date);
+
+    foreach_itt(itt, &m_tpos_g2)
+        itt->second->print_profit(date);
+}
+
+int CPosMaster::clear_pos(int date, int price)
+{
+    foreach_itt(itt, &m_tpos){
+        if (itt->second->get_status() != ST_CLOSE)
+            ASSERT("There are still alive tpos for this mpos, id:%lld\n", m_id);
+    }
+
+    return _clear_pos(date, price);
+}
+
+CPosSlave *CPosMaster::create_tpos(day_price_t& dp)
+{
+    CPosSlave *t0 = new CPosSlave(m_owner, this, dp.date, \
+            get_t0_bc(), dp.open, get_t0_cp(dp.open));
 
     return t0;
 }
 
-void pos_t::process_tpos(day_price_t& price, bool can_create_new_tpos_flag)
+void CPosMaster::clear_tpos(day_price_t& dp, map<int/*date*/, CPosSlave * /*tpos*/> *tpos_map)
 {
-    if (price.high > get_clear_price())
-        clear_tpos();
+    foreach_itt(itt, tpos_map){
+        CPosSlave *t0 = itt->second;
+        int date = itt->first;
 
-    if (can_create_new_tpos_flag){
-        if (price.low < get_buy_price())
-            create_tpos(price);
+        //skip invalid tpos
+        if (t0->get_status() != ST_OPEN)
+            continue;
+        if (dp.high < t0->get_clear_price())
+            continue;
+
+        //yes, TDAY can clear tpos, because it is tpos...
+        if (dp.date >= date)
+            t0->clear_pos(dp.date, t0->get_clear_price());
     }
 }
 
-void pos_t::clear_tpos(int date, int price)
+void CPosMaster::process_tpos(day_price_t& dp)
 {
-    assert(status == ST_OPEN);
+    //create a t0 first
+    CPosSlave *t0 = create_tpos(dp);
+    if (t0)
+        m_tpos[dp.date] = t0;
 
-    status = ST_CLOSE;
-    end_date = date;
-    curr_cost = price;
-
-    op_t *op = new op_t(this, date, DI_SELL, curr_count, price);
-    profit.fee += op->get_fee();
-    ops[begin_date] = op;
-    assert(init_count == curr_count); //we only support buy and sell whole pos once a time
-    profit.float_profit = 0;
-    profit.cash_profit = curr_count * (curr_cost - init_count);
-    profit.total_profit = profit.cash_profit - profit.fee;
-}
-
-int pos_t::get_profit(int date)
-{
-    if (date >= begin_date && date <= end_date){
-        int price = get_close_price(owner->sn, date);
-        profit.float_profit = curr_count * (price - curr_cost) - profit.fee;
-        return profit.float_profit;
-    }else if (date > end_date) {
-        profit.float_profit = 0;
-        return profit.total_profit;
-    }else
-        assert(0); //do know what to do, panic
-}
-
-void pos_t::_summary(int date)
-{
-    get_profit(date);
-    printf("\t,%d,%d,%d,%d,%d,%d,%d\n", \
-            owner->sn, mpos_flag, status, begin_date, end_date, \
-            profit.float_profit, profit.profit_total);
-}
-
-void pos_t::summay(int date)
-{
-    //print base info and profit info
-    if (mpos_flag){// main pos
-        printf("main pos, sn, flag, status, begin_date, end_date, float_profit, total_profit\n");
-    }else {
-        printf("tpos, sn, flag, status, begin_date, end_date, float_profit, total_profit\n");
+    //create another t0(tpos_g2) for the upper t0 if possible
+    if (dp.low <= t0->get_buy_price()){
+        CPosSlaveG2 *t2 = (CPosSlaveG2 *)t0->create_tpos(dp);
+        if (t2)
+            m_tpos_g2[dp.date] = t2;
     }
 
-    get_profit(date);
-    _summary(date);
+    //clear old and new tpos if possible
+    clear_tpos(dp, &m_tpos);
+    clear_tpos(dp, &m_tpos_g2);
 }
 
-int pos_t::get_clear_price()
+long long CPosMaster::get_next_tposid(int date)
 {
-    return (int)(((float)init_cost) * (1 + cpr));
+    char pos_id[1024];
+    char *id = pos_id;
+
+    memset(id, 0, sizeof(id));
+    sprintf(id, "%lld", m_id);
+    id += strlen(id);
+    sprintf(id, "%d", date - 20000000);
+    id += strlen(id);
+
+    sprintf(id, "%02lu", (m_tpos.size() + m_tpos_g2.size() + 1U));
+
+    return atoll(pos_id);
 }
 
-int pos_t::get_buy_price()
+
+CPosSlave::CPosSlave(CPosMaster *mp, day_price_t& dp) //for create t0
+:CPos(mp->get_owner(), dp.date, mp->get_t0_bc(), dp.open, mp->get_t0_cp(dp.open))
 {
-    return (int)(((float)init_cost) * (1 - bpr));
+    m_id = mp->get_next_tposid(dp.date);
+    m_type = ENUM_TPOS;
+    m_holder = mp;
 }
 
-stock_t::stock_t(int sn, string& name, int date, int count, int cost, \
-            float cpr, float t0_cpr,float t0_bpr) //create main pos
+CPosSlave::CPosSlave(CStock *owner, CPosMaster *holder, int begin_date, int count, int cost, int clear_price)
+:CPos(owner, begin_date, count, cost, clear_price)
 {
-    this->sn = sn;
-    this->name = name;
-    this->cpr = cpr;
-    this->t0_cpr = t0_cpr;
-    this->t0_bpr = t0_bpr;
-    main_pos = new pos_t(date, count, cost, cpr);
-    mpos[date] = main_pos;
+    m_id = holder->get_next_tposid(begin_date);
+    m_type = ENUM_TPOS;
+    m_holder = holder;
 }
 
-void stock_t::process_old_tpos(day_price_t& price)
+CPosSlave *CPosSlave::create_tpos(day_price_t& dp)
 {
-    foreach_itt(itt, &tpos){
-        if (itt->second->begin_date < price.date)
-            itt->second->process_tpos(price, false);
-    }
+    CPosSlave *t0 = new CPosSlaveG2(this, dp);
+
+    return t0;
 }
 
-void stock_t::run_t0(day_price_t& price, int policy)
+CPosSlaveG2::CPosSlaveG2(CPosSlave *sp, day_price_t& dp) //for create t0
+    :CPosSlave(sp->get_owner(), sp->get_holder(), dp.date, sp->get_t0_bc(), sp->get_t0_bp(dp.open), dp.open)
 {
-    //process existed t0_pos
-    mpos->process_old_tpos(price);
+    m_type = ENUM_T2POS;
+}
 
-    //get current main pos and create new t0 pos
-    pos_t *t0 = mpos->create_tpos(price);
-    tpos[string(t0->uuid)] = t0;
+CStock::CStock(int sn, string& name, int date, int count, int cost, \
+            int cp, float t0_cpr,float t0_bpr, float t0_bcr)
+{
+    m_sn = sn;
+    m_name = name;
+    m_cp = cp;
+    m_t0_cpr = t0_cpr;
+    m_t0_bpr = t0_bpr;
+    m_t0_bcr = t0_bcr;
 
-    //process today's tpos, may be create new tpos
-    t0->process_tpos(price, true);
+    m_mpos = new CPosMaster(this, date, count, cost, cost*2);
+    m_mpos_map[date] = m_mpos;
+}
+
+long long CStock::get_next_mposid(int date)
+{
+    char pos_id[1024];
+    char *id = pos_id;
+
+    memset(id, 0, sizeof(id));
+    sprintf(id, "%d", date - 20000000);
+    id += strlen(id);
+    sprintf(id, "%02lu", m_mpos_map.size() + 1);
+    return atoll(pos_id);
+}
+
+void CStock::run_t0(day_price_t& dp, int policy)
+{
+    //process tpos till dp.date, including
+    //1. clear existed tpos if possible
+    //2. clear existed tpos_g2 if possible
+    //3. create new tpos_g2 in the dp.date if possible
+    m_mpos->process_tpos(dp);
 
     //day summary
-    mpos->summary(price.date);
-    foreach_itt(itt, &tpos){
-        itt->second->summary(price.date);
-    }
+    m_mpos->print_profit(dp.date);
 }
 
 int close_db(sqlite3 *db)
@@ -206,7 +287,7 @@ int close_db(sqlite3 *db)
     return 0;
 }
 
-int open_db(char *db_path, sqlite3 **db)
+int open_db(const char *db_path, sqlite3 **db)
 {
     if (sqlite3_open(db_path, db) != SQLITE_OK){
         fprintf(stderr, "Could not open database: %s\n", sqlite3_errmsg(*db));
@@ -215,14 +296,14 @@ int open_db(char *db_path, sqlite3 **db)
 
     //set some global parameters for db
     char *errstr = NULL;
-    sqlite3_exec(db, "PRAGMA synchronous=OFF", NULL, NULL, &errstr);
-    //sqlite3_exec(db, "PRAGMA synchronous=ON", NULL, NULL, &errstr);
+    sqlite3_exec(*db, "PRAGMA synchronous=OFF", NULL, NULL, &errstr);
+    //sqlite3_exec(*db, "PRAGMA synchronous=ON", NULL, NULL, &errstr);
     sqlite3_free(errstr);
-    sqlite3_exec(db, "PRAGMA count_changes=OFF", NULL, NULL, &errstr);
+    sqlite3_exec(*db, "PRAGMA count_changes=OFF", NULL, NULL, &errstr);
     sqlite3_free(errstr);
-    sqlite3_exec(db, "PRAGMA journal_mode=MEMORY", NULL, NULL, &errstr);
+    sqlite3_exec(*db, "PRAGMA journal_mode=MEMORY", NULL, NULL, &errstr);
     sqlite3_free(errstr);
-    sqlite3_exec(db, "PRAGMA temp_store=MEMORY", NULL, NULL, &errstr);
+    sqlite3_exec(*db, "PRAGMA temp_store=MEMORY", NULL, NULL, &errstr);
     sqlite3_free(errstr);
 
     return 0;
@@ -235,27 +316,41 @@ int get_open_price(int stock_sn, int date)
 
     snprintf(buf, sizeof(buf), "SELECT open FROM dayline where sn=%d and date='%d'", \
             stock_sn, date);
-    assert(sqlite3_prepare_v2(cfg_db, buf, strlen(buf), &stmt, NULL) == SQLITE_OK);
+    assert(sqlite3_prepare_v2(g_db, buf, strlen(buf), &stmt, NULL) == SQLITE_OK);
     assert(sqlite3_step(stmt) == SQLITE_ROW); //should be only one row
 
     return sqlite3_column_int(stmt, 0);
 }
 
-//vector<int/*date*/, struct day_price_t> trade_days;
-void get_trade_days(stock_sn, begin_date, end_date, trade_days)
+int get_close_price(int stock_sn, int date)
 {
     char buf[4096];
     sqlite3_stmt* stmt;
 
-    snprintf(buf, sizeof(buf), "SELECT * FROM dayline where sn=%d and date bwtween '%d' and '%d'", \
+    snprintf(buf, sizeof(buf), "SELECT close FROM dayline where sn=%d and date='%d'", \
+            stock_sn, date);
+    assert(sqlite3_prepare_v2(g_db, buf, strlen(buf), &stmt, NULL) == SQLITE_OK);
+    assert(sqlite3_step(stmt) == SQLITE_ROW); //should be only one row
+
+    return sqlite3_column_int(stmt, 0);
+}
+
+
+//vector<struct day_price_t> trade_days;
+void get_trade_days(int stock_sn, int begin_date, int end_date, vector<struct day_price_t>& trade_days)
+{
+    char buf[4096];
+    sqlite3_stmt* stmt;
+
+    snprintf(buf, sizeof(buf), "SELECT * FROM dayline where sn=%d and date between '%d' and '%d'", \
             stock_sn, begin_date, end_date);
-    assert(sqlite3_prepare_v2(cfg_db, buf, strlen(buf), &stmt, NULL) == SQLITE_OK);
+    assert(sqlite3_prepare_v2(g_db, buf, strlen(buf), &stmt, NULL) == SQLITE_OK);
 
     int num = 0;
     while(1){
         int i = sqlite3_step(stmt);
         if (i == SQLITE_ROW){
-            struct day_price_t d(atoi(sqlite3_column_int(stmt, 1)), \
+            struct day_price_t d(atoi((const char *)sqlite3_column_text(stmt, 1)), \
                     sqlite3_column_int(stmt, 2), \
                     sqlite3_column_int(stmt, 3), \
                     sqlite3_column_int(stmt, 4), \
@@ -275,7 +370,7 @@ void get_trade_days(stock_sn, begin_date, end_date, trade_days)
     sqlite3_finalize(stmt);
 }
 
-void run_t0_simulator(int stock_sn, string& begin_date, string& end_date, int policy)
+void run_t0_simulator(int stock_sn, int begin_date, int end_date, int policy)
 {
     //create_main_pos
     int cost = get_open_price(stock_sn, begin_date);
@@ -284,35 +379,36 @@ void run_t0_simulator(int stock_sn, string& begin_date, string& end_date, int po
         assert(0);
     }
 
-    stock_t stock(stock_sn, string("unknown"), begin_date, COUNT_INIT_MAIN, cost);
+    string name("unknown");
+    CStock stock(stock_sn, name, begin_date, COUNT_INIT_MAIN, cost, \
+            cost*2, 1.05f, 0.95f, 0.5f);
 
 
     //from begin_date to end_date run_t0_operation day by day
-    vector<int/*date*/, struct day_price_t> trade_days;
+    vector<struct day_price_t> trade_days;
     get_trade_days(stock_sn, begin_date, end_date, trade_days);
 
-    if (trade_days.count() > 0)
+    if (trade_days.size() > 0)
         trade_days.erase (trade_days.begin()); //T0 from the second day of creating main pos
-    printf(stderr, "There are %d trade days between %d and %d\n", trade_days.count(), begin_date, end_date);
+    fprintf(stderr, "There are %lu trade days between %d and %d\n", trade_days.size(), begin_date, end_date);
 
-    if (!trade_days.count()){
-        printf(stderr, "No trade_days, done.\n");
+    if (!trade_days.size()){
+        fprintf(stderr, "No trade_days, done.\n");
         return;
     }
 
-    foreach(itt, trade_days){
-        stock.run_t0(itt->second, policy);
+    foreach_itt(itt, &trade_days){
+        stock.run_t0(*itt, policy);
     }
 }
 
 /* Flag set by ‘--verbose’. */
 int verbose_flag;
-sqlite3 *g_db = NULL;
 
 int main (int argc, char **argv)
 {
-    string begin_date, end_date, db_path;
-    int stock_sn, policy;
+    string db_path;
+    int stock_sn, begin_date, end_date, policy;
 
     int c;
 
@@ -335,7 +431,7 @@ int main (int argc, char **argv)
         /* getopt_long stores the option index here. */
         int option_index = 0;
 
-        c = getopt_long (argc, argv, "b:e:p:",
+        c = getopt_long (argc, argv, "s:b:e:p:d:",
                 long_options, &option_index);
 
         /* Detect the end of the options. */
@@ -356,7 +452,7 @@ int main (int argc, char **argv)
 
             case 'b':
                 printf ("begin date: %s\n", optarg);
-                begin_date.assign(optarg);
+                begin_date = atoi(optarg);
                 break;
 
             case 'd':
@@ -366,7 +462,7 @@ int main (int argc, char **argv)
 
             case 'e':
                 printf ("end date: %s\n", optarg);
-                end_date.assign(optarg);
+                end_date = atoi(optarg);
                 break;
 
             case 'p':
@@ -404,13 +500,13 @@ int main (int argc, char **argv)
 
     //OK , let's begin
 
-    if (open_db(db_path, &g_db)){
-        fprintf(stderr, "Cannot open db:%s\n", db_path);
+    if (open_db(db_path.c_str(), &g_db)){
+        fprintf(stderr, "Cannot open db:%s\n", db_path.c_str());
         exit(EXIT_FAILURE);
     }
 
-    int ret = run_t0_simulator(stock_sn, begin_date, end_date, policy);
+    run_t0_simulator(stock_sn, begin_date, end_date, policy);
 
-    return ret;
+    return 0;
 }
 
