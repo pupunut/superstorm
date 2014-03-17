@@ -87,16 +87,11 @@ int CBackData::get_close_price(int stock_sn, int date)
     return sqlite3_column_int(stmt, 0);
 }
 
-
 //vector<struct day_price_t> trade_days;
-void CBackData::get_trade_days(int stock_sn, int begin_date, int end_date, vector<struct day_price_t>& trade_days)
+void CBackData::_get_trade_days(char *query, vector<struct day_price_t>& trade_days)
 {
-    char buf[4096];
     sqlite3_stmt* stmt;
-
-    snprintf(buf, sizeof(buf), "SELECT * FROM dayline where sn=%d and date between '%d' and '%d'", \
-            stock_sn, begin_date, end_date);
-    assert(sqlite3_prepare_v2(m_db, buf, strlen(buf), &stmt, NULL) == SQLITE_OK);
+    assert(sqlite3_prepare_v2(m_db, query, strlen(query), &stmt, NULL) == SQLITE_OK);
 
     int num = 0;
     while(1){
@@ -120,4 +115,24 @@ void CBackData::get_trade_days(int stock_sn, int begin_date, int end_date, vecto
     }
 
     sqlite3_finalize(stmt);
+}
+
+
+//vector<struct day_price_t> trade_days;
+void CBackData::get_trade_days(int stock_sn, int begin_date, int end_date, vector<struct day_price_t>& trade_days)
+{
+    char buf[4096];
+    snprintf(buf, sizeof(buf), "SELECT * FROM dayline where sn=%d and date between '%d' and '%d'", \
+            stock_sn, begin_date, end_date);
+    _get_trade_days(buf, trade_days);
+}
+
+void CBackData::get_trade_days(int stock_sn, int begin_date, vector<struct day_price_t>& trade_days)
+{
+    char buf[4096];
+
+    snprintf(buf, sizeof(buf), "SELECT * FROM dayline where sn=%d and date >= '%d'", \
+            stock_sn, begin_date);
+
+    _get_trade_days(buf, trade_days);
 }

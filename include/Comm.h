@@ -28,6 +28,8 @@ using namespace std;
 #define DEFAULT_T0_BPR 20//denominator
 #define DEFAULT_T0_CPR 20//denominator
 
+#define RET_END 100
+
 #define CONCATNATE(a, b) a##b
 #define iterator_of(item) CONCATNATE(item, _itt)
 
@@ -103,11 +105,13 @@ class CPos;
 class CPosMaster;
 class CPosSlave;
 class CPosSlaveG2;
+class CBackData;
 
 //no parameters and no return values
 typedef void (CPosSlave::*ps_func)();
 typedef void (CPosSlaveG2::*ps2_func)();
 typedef void (CPosMaster::*pm_unc)();
+typedef void (simulator_func)(CBackData *, int, int, int, int);
 
 typedef enum{
     ENUM_MPOS = 1,
@@ -129,6 +133,10 @@ struct day_price_t{
     int count;
     int total;
 
+    day_price_t()
+    {
+    }
+
     day_price_t(int date, int open, int high, int low, int close, int count, int total)
     {
         this->date = date;
@@ -138,6 +146,10 @@ struct day_price_t{
         this->close = close;
         this->count = count;
         this->total = total;
+    }
+    void print(const char *msg)
+    {
+        fprintf(stderr, "%s: day price:%d, %d\n", msg, date, open);
     }
 };
 
@@ -156,5 +168,7 @@ typedef struct profit_s{
     }
 }profit_t;
 
+
+int main_comm(int argc, char *argv[], simulator_func *func);
 
 #endif //_COMM_H

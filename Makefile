@@ -15,14 +15,21 @@ endif
 SRC := $(shell ls *.cpp)
 OBJ := $(patsubst %.cpp, %.oo, $(SRC)) 
 HEADERS := $(wildcard $(INCDIR)/*.h)
+
+t0_OBJ := $(filter-out drop_simulator.oo, $(OBJ))
+drop_OBJ := $(filter-out t0_simulator.oo, $(OBJ))
 EXE := t0_simulator
+EXE += drop_simulator
 
 .PHONY: all install clean test
 
 all: $(EXE)
 
-t0_simulator: $(OBJ)
-	$(CC) $(CFLAGS)  $(LDFLAGS) $(OBJ) -o t0_simulator
+t0_simulator: $(t0_OBJ)
+	$(CC) $(CFLAGS)  $(LDFLAGS) $(t0_OBJ) -o t0_simulator
+
+drop_simulator: $(drop_OBJ)
+	$(CC) $(CFLAGS)  $(LDFLAGS) $(drop_OBJ) -o drop_simulator
 
 %.oo: %.cpp $(HEADERS)
 	$(CC) -c $(CFLAGS) $< -o $@ 

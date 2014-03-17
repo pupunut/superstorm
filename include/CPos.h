@@ -77,6 +77,8 @@ public:
     int get_t0_bc() { return (int)((float)m_curr_count * m_t0_bcr); }
     int get_t0_cp(int price) { return (int)((float)price * m_t0_cpr); }
     int get_t0_bp(int price) { return (int)((float)price * m_t0_bpr); }
+    int short_pos(int date, int price, int count);
+    int get_count() { return m_curr_count; }
 };
 
 

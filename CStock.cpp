@@ -30,6 +30,21 @@ CStock::CStock(CBackData *db, int sn, string& name, int date, int count, int cos
     m_mpos_map[date] = m_mpos;
 }
 
+CStock::CStock(CBackData *db, int sn, string& name, int date, int count, int cost, \
+            int psc)
+{
+    m_db = db;
+    m_sn = sn;
+    m_name = name;
+    m_psc = psc;
+    m_t0_cpr = 0;
+    m_t0_bpr = 0;
+    m_t0_bcr = 0;
+
+    m_mpos = new CPosMaster(this, date, count, cost, cost*2);
+    m_mpos_map[date] = m_mpos;
+}
+
 long long CStock::get_next_mposid(int date)
 {
     char pos_id[1024];
@@ -53,5 +68,19 @@ void CStock::run_t0(day_price_t& dp, int policy)
     //day summary
     m_mpos->print_profit(dp.date);
 }
+
+int CStock::run_drop(day_price_t& dp)
+{
+    dp.print("Short pos today");
+    int ret = m_mpos->short_pos(dp.date, dp.open, m_psc);
+
+    //day summary
+    m_mpos->print_profit(dp.date);
+
+    if (m_mpos->get_count() == 0)
+        return RET_END;
+    return 0;
+}
+
 
 
