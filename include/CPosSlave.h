@@ -21,9 +21,7 @@ public:
     bool is_t2pos() { return false; }
     CPosMaster *get_holder() { return m_holder; }
     virtual CPosSlave *create_tpos(day_price_t& dp);
-    virtual int get_buy_price() { return (int)((float)m_init_cost * m_t0_bpr); }
     void print_profit(int date) { return _print_profit(date); }
-    int clear_pos(int date, int price) { return _clear_pos(date, price); }
 };
 
 class CPosSlaveG2 : public CPosSlave{

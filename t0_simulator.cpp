@@ -19,6 +19,7 @@
 
 using namespace std;
 
+#if 0
 void run_t0_simulator(CBackData *db, int stock_sn, int begin_date, int end_date, int policy)
 {
     //create_main_pos
@@ -49,6 +50,8 @@ void run_t0_simulator(CBackData *db, int stock_sn, int begin_date, int end_date,
         stock.run_t0(*itt, policy);
     }
 }
+
+#endif
 
 int main (int argc, char **argv)
 {

@@ -71,7 +71,9 @@ int CBackData::get_open_price(int stock_sn, int date)
     assert(sqlite3_prepare_v2(m_db, buf, strlen(buf), &stmt, NULL) == SQLITE_OK);
     assert(sqlite3_step(stmt) == SQLITE_ROW); //should be only one row
 
-    return sqlite3_column_int(stmt, 0);
+    int price =  sqlite3_column_int(stmt, 0);
+    sqlite3_finalize(stmt);
+    return price;
 }
 
 int CBackData::get_close_price(int stock_sn, int date)
@@ -84,7 +86,10 @@ int CBackData::get_close_price(int stock_sn, int date)
     assert(sqlite3_prepare_v2(m_db, buf, strlen(buf), &stmt, NULL) == SQLITE_OK);
     assert(sqlite3_step(stmt) == SQLITE_ROW); //should be only one row
 
-    return sqlite3_column_int(stmt, 0);
+    int price =  sqlite3_column_int(stmt, 0);
+    sqlite3_finalize(stmt);
+
+    return price;
 }
 
 //vector<struct day_price_t> trade_days;
@@ -136,3 +141,52 @@ void CBackData::get_trade_days(int stock_sn, int begin_date, vector<struct day_p
 
     _get_trade_days(buf, trade_days);
 }
+
+int CBackData::get_lastest_date()
+{
+    char buf[4096];
+    sqlite3_stmt* stmt;
+    snprintf(buf, sizeof(buf), "SELECT max(date) FROM dayline");
+    assert(sqlite3_prepare_v2(m_db, buf, strlen(buf), &stmt, NULL) == SQLITE_OK);
+    assert(sqlite3_step(stmt) == SQLITE_ROW); //should be only one row
+
+    int date = sqlite3_column_int(stmt, 0);
+    sqlite3_finalize(stmt);
+
+    return date;
+}
+
+int CBackData::get_all_sn(vector<int/*sn*/> &snlist)
+{
+    char buf[4096];
+    sqlite3_stmt* stmt;
+    snprintf(buf, sizeof(buf), "SELECT DISTINCT sn FROM dayline");
+    assert(sqlite3_prepare_v2(m_db, buf, strlen(buf), &stmt, NULL) == SQLITE_OK);
+
+    int num = 0;
+    while(1){
+        int i = sqlite3_step(stmt);
+        if (i == SQLITE_ROW){
+            snlist.push_back(sqlite3_column_int(stmt, 0));
+        }else if(i == SQLITE_DONE){
+            break;
+        }else {
+            fprintf(stderr, "SQL Failed.\n");
+            assert(0);
+        }
+    }
+
+    sqlite3_finalize(stmt);
+    return 0;
+}
+
+int CBackData::get_dp_desc(int sn, int date, vector<day_price_t> &dp_desc)
+{
+    char buf[4096];
+    snprintf(buf, sizeof(buf), "SELECT * FROM dayline where sn=%d and date <= '%d' ORDER BY date DESC", \
+            sn, date);
+    _get_trade_days(buf, dp_desc);
+
+    return 0;
+}
+

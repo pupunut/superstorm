@@ -29,9 +29,8 @@ void run_drop_simulator(CBackData *db, int stock_sn, int begin_date, int end_dat
     }
 
     string name("unknown");
-    CStock stock(db, stock_sn, name, begin_date, COUNT_INIT_MAIN, cost, 3);
+    CStock stock(db, stock_sn, name, begin_date, COUNT_INIT_MAIN, cost);
 
-    //from begin_date to end_date run_t0_operation day by day
     vector<struct day_price_t> trade_days;
     db->get_trade_days(stock_sn, begin_date, trade_days);
     assert(trade_days.size() > 1);
@@ -50,7 +49,7 @@ void run_drop_simulator(CBackData *db, int stock_sn, int begin_date, int end_dat
             to_drop = false;
 
         if (to_drop)
-            if (RET_END == stock.run_drop(*itt))
+            if (RET_END == stock.short_mpos(*itt, 3/* drop 1/3*/))
                 return;
 
         last_dp = *itt;

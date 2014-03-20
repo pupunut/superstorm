@@ -19,6 +19,9 @@ public:
     int get_close_price(int stock_sn, int date);
     void get_trade_days(int stock_sn, int begin_date, int end_date, vector<struct day_price_t>& trade_days);
     void get_trade_days(int stock_sn, int begin_date, vector<struct day_price_t>& trade_days);
+    int get_lastest_date();
+    int get_all_sn(vector<int/*sn*/> &snlist);
+    int get_dp_desc(int sn, int date, vector<day_price_t> &dp_desc);
 };
 
 #endif

@@ -15,35 +15,24 @@
 
 using namespace std;
 
-CStock::CStock(CBackData *db, int sn, string& name, int date, int count, int cost, \
-            int cp, float t0_cpr,float t0_bpr, float t0_bcr)
+CStock::CStock(CBackData *db, int sn, string& name)
 {
     m_db = db;
     m_sn = sn;
     m_name = name;
-    m_cp = cp;
-    m_t0_cpr = t0_cpr;
-    m_t0_bpr = t0_bpr;
-    m_t0_bcr = t0_bcr;
-
-    m_mpos = new CPosMaster(this, date, count, cost, cost*2);
-    m_mpos_map[date] = m_mpos;
 }
 
-CStock::CStock(CBackData *db, int sn, string& name, int date, int count, int cost, \
-            int psc)
+CStock::CStock(CBackData *db, int sn, string& name, int date, int count, int cost)
 {
     m_db = db;
     m_sn = sn;
     m_name = name;
-    m_psc = psc;
-    m_t0_cpr = 0;
-    m_t0_bpr = 0;
-    m_t0_bcr = 0;
 
-    m_mpos = new CPosMaster(this, date, count, cost, cost*2);
+    assert(m_mpos == NULL); //only support 1 alive master pos
+    m_mpos = new CPosMaster(this, date, count, cost);
     m_mpos_map[date] = m_mpos;
 }
+
 
 long long CStock::get_next_mposid(int date)
 {
@@ -57,30 +46,41 @@ long long CStock::get_next_mposid(int date)
     return atoll(pos_id);
 }
 
-void CStock::run_t0(day_price_t& dp, int policy)
+CPosMaster *CStock::create_mpos(int date, int count, int cost)
 {
-    //process tpos till dp.date, including
-    //1. clear existed tpos if possible
-    //2. clear existed tpos_g2 if possible
-    //3. create new tpos_g2 in the dp.date if possible
-    m_mpos->process_tpos(dp);
-
-    //day summary
-    m_mpos->print_profit(dp.date);
+    assert(m_mpos == NULL); //only support 1 alive master pos
+    m_mpos = new CPosMaster(this, date, count, cost);
+    m_mpos_map[date] = m_mpos;
+    return m_mpos;
 }
 
-int CStock::run_drop(day_price_t& dp)
+int CStock::short_mpos(day_price_t& dp, int percent)
 {
-    dp.print("Short pos today");
-    int ret = m_mpos->short_pos(dp.date, dp.open, m_psc);
+    dp.print("Short mpos today");
+    int ret = m_mpos->short_pos(dp.date, dp.open, percent);
 
     //day summary
     m_mpos->print_profit(dp.date);
 
-    if (m_mpos->get_count() == 0)
+    if (m_mpos->get_count() == 0){ //mpos has been cleared already
+        m_mpos = NULL;
         return RET_END;
+    }
     return 0;
 }
+
+int CStock::clear_mpos(day_price_t& dp)
+{
+    dp.print("Clear mpos today");
+    int ret = m_mpos->clear_pos(dp);
+    m_mpos = NULL;
+
+    //day summary
+    m_mpos->print_profit(dp.date);
+
+    return RET_END;
+}
+
 
 
 

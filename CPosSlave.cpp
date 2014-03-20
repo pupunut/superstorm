@@ -16,8 +16,9 @@
 using namespace std;
 
 CPosSlave::CPosSlave(CPosMaster *mp, day_price_t& dp) //for create t0
-:CPos(mp->get_owner(), dp.date, mp->get_t0_bc(), dp.open, mp->get_t0_cp(dp.open))
+:CPos(mp->get_owner(), dp.date, 0/*TBD*/, dp.open)
 {
+    assert(0); //TBD
     m_id = mp->get_next_tposid(dp.date);
     m_type = ENUM_TPOS;
     m_holder = mp;
@@ -25,7 +26,7 @@ CPosSlave::CPosSlave(CPosMaster *mp, day_price_t& dp) //for create t0
 }
 
 CPosSlave::CPosSlave(CStock *owner, CPosMaster *holder, int begin_date, int count, int cost, int clear_price)
-:CPos(owner, begin_date, count, cost, clear_price)
+:CPos(owner, begin_date, count, cost)
 {
     m_id = holder->get_next_tposid(begin_date);
     m_type = ENUM_TPOS;
@@ -42,8 +43,9 @@ CPosSlave *CPosSlave::create_tpos(day_price_t& dp)
 }
 
 CPosSlaveG2::CPosSlaveG2(CPosSlave *sp, day_price_t& dp) //for create t0
-    :CPosSlave(sp->get_owner(), sp->get_holder(), dp.date, sp->get_t0_bc(), sp->get_t0_bp(dp.open), dp.open)
+    :CPosSlave(sp->get_owner(), sp->get_holder(), dp.date, 0/*TBD*/, 0/*TBD*/, dp.open)
 {
+    assert(0); //TBD
     m_type = ENUM_T2POS;
     m_buddy = sp;
 }

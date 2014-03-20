@@ -17,7 +17,7 @@
 
 using namespace std;
 
-CPos:: CPos(CStock *owner, int begin_date, int count, int cost, int clear_price)
+CPos:: CPos(CStock *owner, int begin_date, int count, int cost)
 {
     m_db = owner->get_db();
     m_owner = owner;
@@ -26,57 +26,11 @@ CPos:: CPos(CStock *owner, int begin_date, int count, int cost, int clear_price)
     m_init_count = m_curr_count = count;
     m_init_cost = m_curr_cost = cost;
     m_status = ST_OPEN;
-    m_clear_price = clear_price;
-
-    m_t0_cpr = 1 + 0.05; //the base value is dynamic(day line), so there is only a rate
-    m_t0_bpr = 1 - 0.05;
-    m_t0_bcr = 0.5;
 
     COperation *op = new COperation(this, begin_date, DI_BUY, count, cost);
     m_ops[begin_date] = op;
     m_fix_profit.fee = op->get_fee();
 }
-
-int CPos::_clear_pos(int date, int price)
-{
-    return short_pos(date, price, m_curr_count);
-}
-
-int CPos::short_pos(int date, int price, int psc)
-{
-    assert(m_status == ST_OPEN);
-    assert(date >= m_begin_date && m_end_date == 0);
-
-    int count = m_init_count / psc;
-    if (count > m_curr_count)
-        count = m_curr_count;
-
-    m_curr_count -= count;
-    if (m_curr_count == 0){
-        m_status = ST_CLOSE;
-        m_end_date = date;
-    }
-
-    m_curr_cost = price;
-    if (price < m_clear_price)
-        INFO("INFO: pos_id:%lld Not reach target to clear. target price:%d, exec price:%d\n",
-                m_id, m_clear_price, price);
-
-    COperation *op = new COperation(this, date, DI_SELL, count, price);
-
-    m_ops[date] = op;
-    //assert(m_init_count == m_curr_count); //we only support buy and sell whole pos once a time
-
-    //we get fix_profit now
-    profit_t *p = &m_fix_profit;
-    p->fee += op->get_fee();
-    p->cash_profit += count * (price - m_init_cost);
-    p->float_profit = m_curr_count * (price - m_init_cost) + p->cash_profit;
-    p->total_profit = p->cash_profit - p->fee;
-
-    return p->total_profit;
-}
-
 
 int CPos::_account_pos(int date)
 {
@@ -112,3 +66,43 @@ void CPos::_print_profit(int date)
     printf("%lld,%d,%d,%d,%d,%d\n", \
             m_id, m_type, m_status, m_begin_date, m_end_date, _get_profit(date));
 }
+
+int CPos::short_pos(day_price_t &dp, int percent)
+{
+    int date = dp.date;
+    int price = dp.open;
+
+    assert(m_status == ST_OPEN);
+    assert(date >= m_begin_date && m_end_date == 0);
+
+    int count = m_init_count / percent;
+    if (count > m_curr_count)
+        count = m_curr_count;
+
+    m_curr_count -= count;
+    if (m_curr_count == 0){
+        m_status = ST_CLOSE;
+        m_end_date = date;
+    }
+
+    m_curr_cost = price;
+    COperation *op = new COperation(this, date, DI_SELL, count, price);
+    m_ops[date] = op;
+
+    //we get fix_profit now
+    profit_t *p = &m_fix_profit;
+    p->fee += op->get_fee();
+    p->cash_profit += count * (price - m_init_cost);
+    p->float_profit = m_curr_count * (price - m_init_cost) + p->cash_profit;
+    p->total_profit = p->cash_profit - p->fee;
+
+    return p->total_profit;
+}
+
+int CPos::clear_pos(day_price_t &dp)
+{
+    return short_pos(dp, m_curr_count);
+}
+
+
+

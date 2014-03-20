@@ -16,8 +16,8 @@
 
 using namespace std;
 
-CPosMaster::CPosMaster(CStock *owner, int begin_date, int count, int cost, int  clear_price)
-:CPos(owner, begin_date, count, cost, clear_price)
+CPosMaster::CPosMaster(CStock *owner, int begin_date, int count, int cost)
+:CPos(owner, begin_date, count, cost)
 {
     m_id = owner->get_next_mposid(begin_date);
     m_type = ENUM_MPOS;
@@ -45,19 +45,24 @@ int CPosMaster::clear_pos(int date, int price)
             ASSERT("There are still alive tpos for this mpos, id:%lld\n", m_id);
     }
 
-    return _clear_pos(date, price);
+    return CPos::clear_pos(date, price);
 }
 
 CPosSlave *CPosMaster::create_tpos(day_price_t& dp)
 {
+    assert(0); //TBD
+    /*
     CPosSlave *t0 = new CPosSlave(m_owner, this, dp.date, \
             get_t0_bc(), dp.open, get_t0_cp(dp.open));
 
     return t0;
+            */
 }
 
 void CPosMaster::clear_tpos(day_price_t& dp, map<int/*date*/, CPosSlave * /*tpos*/> *tpos_map)
 {
+    assert(0); //TBD
+    /*
     foreach_itt(itt, tpos_map){
         CPosSlave *t0 = itt->second;
         int date = itt->first;
@@ -82,11 +87,14 @@ void CPosMaster::clear_tpos(day_price_t& dp, map<int/*date*/, CPosSlave * /*tpos
                 assert(0);
         }
     }
+    */
 }
 
 void CPosMaster::process_tpos(day_price_t& dp)
 {
+    assert(0); //TBD
     //create a t0 first
+    /*
     CPosSlave *t0 = create_tpos(dp);
     if (t0)
         m_tpos[dp.date] = t0;
@@ -101,6 +109,7 @@ void CPosMaster::process_tpos(day_price_t& dp)
     //clear old and new tpos if possible
     clear_tpos(dp, &m_tpos);
     clear_tpos(dp, &m_tpos_g2);
+    */
 }
 
 long long CPosMaster::get_next_tposid(int date)

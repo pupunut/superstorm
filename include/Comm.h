@@ -120,6 +120,25 @@ typedef enum{
     ENUM_POS_TYPE_SIZE
 }pos_type_t;
 
+typedef enum{
+    ENUM_PP_LOW_NRB = 0,
+    ENUM_PP_LOW_RB,
+    ENUM_PP_LOW_GAP,
+    ENUM_PP_LOW_MD,
+    ENUM_PP_HIGH_NRB,
+    ENUM_PP_HIGH_RB,
+    ENUM_PP_HIGH_GAP,
+    ENUM_PP_HIGH_MD,
+    ENUM_PP_SIZE
+}point_policy_t;
+
+char *point_policy
+
+enum{
+    ENUM_POINT_IN = 0,
+    ENUM_POINT_OUT
+};
+
 enum{
     ENUM_BACKDATA_DB = 1
 };
@@ -147,10 +166,39 @@ struct day_price_t{
         this->count = count;
         this->total = total;
     }
+
     void print(const char *msg)
     {
         fprintf(stderr, "%s: day price:%d, %d\n", msg, date, open);
     }
+
+    int get_range() { return high - low; }
+    int get_top_tail() { return open > close ? high - open : high - close; }
+    int get_bottom_tail() { return open > close ? close - low : open - low; }
+};
+
+struct point_t{
+    int sn;
+    int date;
+    int price;
+    int type; //0 - in, 1 - out
+    point_policy_t policy;
+    point_t () {}
+    point_t (int sn, int date, int price, int type, point_policy_t policy)
+    {
+        this->sn = sn;
+        this->date = date;
+        this->price = price;
+        this->type = type;
+        this->policy = policy;
+    }
+
+    void print(const char *msg)
+    {
+        fprintf(stderr, "%s: point, sn:%d, date:%d, open:%d, type:%d, policy:%d\n",
+                sn, date, price, type, policy);
+    }
+
 };
 
 typedef struct profit_s{

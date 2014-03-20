@@ -16,20 +16,29 @@ SRC := $(shell ls *.cpp)
 OBJ := $(patsubst %.cpp, %.oo, $(SRC)) 
 HEADERS := $(wildcard $(INCDIR)/*.h)
 
-t0_OBJ := $(filter-out drop_simulator.oo, $(OBJ))
-drop_OBJ := $(filter-out t0_simulator.oo, $(OBJ))
 EXE := t0_simulator
 EXE += drop_simulator
+EXE += find_low
+EXE_OBJ := $(addsuffix oo, $(EXE))
+
+NON_EXE_OBJ := $(filter-out $(EXE_OBJ), $(OBJ))
+
+t0_OBJ := $(NON_EXE_OBJ) t0_simulator.oo
+drop_OBJ := $(NON_EXE_OBJ) drop_simulator.oo
+find_low_OBJ := $(NON_EXE_OBJ) find_low.oo
 
 .PHONY: all install clean test
 
 all: $(EXE)
 
 t0_simulator: $(t0_OBJ)
-	$(CC) $(CFLAGS)  $(LDFLAGS) $(t0_OBJ) -o t0_simulator
+	$(CC) $(CFLAGS)  $(LDFLAGS) $^ -o $@
 
 drop_simulator: $(drop_OBJ)
-	$(CC) $(CFLAGS)  $(LDFLAGS) $(drop_OBJ) -o drop_simulator
+	$(CC) $(CFLAGS)  $(LDFLAGS) $^ -o $@
+
+find_low: $(find_low_OBJ)
+	$(CC) $(CFLAGS)  $(LDFLAGS) $^ -o $@
 
 %.oo: %.cpp $(HEADERS)
 	$(CC) -c $(CFLAGS) $< -o $@ 
