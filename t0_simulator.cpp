@@ -19,9 +19,9 @@
 
 using namespace std;
 
-#if 0
 void run_t0_simulator(CBackData *db, int stock_sn, int begin_date, int end_date, int policy)
 {
+#if 0
     //create_main_pos
     int cost = db->get_open_price(stock_sn, begin_date);
     if (cost <= 0){
@@ -49,9 +49,9 @@ void run_t0_simulator(CBackData *db, int stock_sn, int begin_date, int end_date,
     foreach_itt(itt, &trade_days){
         stock.run_t0(*itt, policy);
     }
+#endif
 }
 
-#endif
 
 int main (int argc, char **argv)
 {

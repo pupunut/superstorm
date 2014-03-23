@@ -26,7 +26,7 @@ using namespace std;
 static int verbose_flag;
 int main_comm(int argc, char *argv[], simulator_func *func)
 {
-    string db_path;
+    char *db_path;
     int stock_sn, begin_date, end_date, policy;
 
     int c;
@@ -76,7 +76,7 @@ int main_comm(int argc, char *argv[], simulator_func *func)
 
             case 'd':
                 printf ("database: %s\n", optarg);
-                db_path.assign(optarg);
+                db_path = optarg;
                 break;
 
             case 'e':

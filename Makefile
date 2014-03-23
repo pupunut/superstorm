@@ -1,7 +1,8 @@
 INCDIR :=$(shell pwd)/include
 
 CC := g++
-CFLAGS := -ggdb -std=gnu++0x
+CFLAGS := -ggdb 
+#CFLAGS += -std=gnu++0x
 CFLAGS += -I$(INCDIR)
 LDFLAGS := -luuid -lsqlite3
 
@@ -19,7 +20,7 @@ HEADERS := $(wildcard $(INCDIR)/*.h)
 EXE := t0_simulator
 EXE += drop_simulator
 EXE += find_low
-EXE_OBJ := $(addsuffix oo, $(EXE))
+EXE_OBJ := $(addsuffix .oo, $(EXE))
 
 NON_EXE_OBJ := $(filter-out $(EXE_OBJ), $(OBJ))
 

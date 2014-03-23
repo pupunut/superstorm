@@ -1,11 +1,14 @@
 #ifndef _COMM_H_
 #define _COMM_H_
 
+#include <stdio.h>
+#include <stdlib.h>
 #include <assert.h>
 #include <sqlite3.h>
 
 #include <map>
 #include <string>
+#include <algorithm>
 
 using namespace std;
 
@@ -132,7 +135,16 @@ typedef enum{
     ENUM_PP_SIZE
 }point_policy_t;
 
-char *point_policy
+static const char *point_policy[] = {
+    "NRB",
+    "RB",
+    "GAP",
+    "MD",
+    "RB",
+    "RB",
+    "GAP",
+    "MD"
+};
 
 enum{
     ENUM_POINT_IN = 0,
@@ -172,6 +184,7 @@ struct day_price_t{
         fprintf(stderr, "%s: day price:%d, %d\n", msg, date, open);
     }
 
+    int get_body() { return abs(close - open); }
     int get_range() { return high - low; }
     int get_top_tail() { return open > close ? high - open : high - close; }
     int get_bottom_tail() { return open > close ? close - low : open - low; }
@@ -193,10 +206,17 @@ struct point_t{
         this->policy = policy;
     }
 
+    bool operator < (const point_t& p) const {
+        if (policy == p.policy)
+            return sn < p.sn;
+        else
+            return policy < p.policy;
+    }
+
     void print(const char *msg)
     {
-        fprintf(stderr, "%s: point, sn:%d, date:%d, open:%d, type:%d, policy:%d\n",
-                sn, date, price, type, policy);
+        fprintf(stderr, "%s: point, sn:%06d, p:%s, date:%d, open:%d, type:%d\n",
+                msg, sn, point_policy[policy], date, price, type);
     }
 
 };
