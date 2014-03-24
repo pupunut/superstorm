@@ -150,6 +150,12 @@ typedef enum{
     ENUM_PT_SIZE
 }point_type_t;
 
+typedef enum{
+    ENUM_SP_NONE = 0,
+    ENUM_SP_3D,
+    ENUM_SP_SIZE
+}short_policy_t;
+
 static const char *point_policy[] = {
     "NONE"
     "NRB",
@@ -167,6 +173,7 @@ enum{
 };
 
 struct day_price_t{
+    int id;
     int date;
     int open;
     int high;
@@ -190,6 +197,18 @@ struct day_price_t{
         this->total = total;
     }
 
+    day_price_t(int id, int date, int open, int high, int low, int close, int count, int total)
+    {
+        this->id = id;
+        this->date = date;
+        this->open = open;
+        this->high = high;
+        this->low = low;
+        this->close = close;
+        this->count = count;
+        this->total = total;
+    }
+
     void print(const char *msg)
     {
         fprintf(stderr, "%s: day price:%d, %d\n", msg, date, open);
@@ -202,6 +221,7 @@ struct day_price_t{
 };
 
 struct point_t{
+    int id;
     int sn;
     int date;
     int price;
@@ -229,6 +249,18 @@ struct point_t{
         this->fine = fine;
     }
 
+    point_t (int id, int sn, int date, int price, point_type_t type, point_policy_coarse_t coarse, point_policy_t fine)
+    {
+        this->id = id;
+        this->sn = sn;
+        this->date = date;
+        this->price = price;
+        this->type = type;
+        this->coarse = coarse;
+        this->fine = fine;
+    }
+
+
     bool operator < (const point_t& p) const {
         if (coarse == p.coarse){
             if (fine == p.fine)
@@ -248,6 +280,15 @@ struct point_t{
 
 };
 
+struct short_point_t{
+    int id; //for db
+    point_t lp;
+    day_price_t dp;
+    int count;
+    int price;
+    int profit;
+};
+
 typedef struct profit_s{
     int fee;
     int float_profit;
@@ -263,6 +304,7 @@ typedef struct profit_s{
     }
 }profit_t;
 
+char *to_date(int date, char *buf);
 
 int main_comm(int argc, char *argv[], simulator_func *func);
 
