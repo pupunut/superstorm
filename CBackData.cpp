@@ -153,7 +153,7 @@ void CBackData::_get_trade_days(char *query, vector<struct day_price_t>& trade_d
 }
 
 //map<int, vector<struct day_price_t>> trade_days;
-void CBackData::_get_trade_days(char *query, map<int, vector<struct day_price_t> > &trade_days)
+void CBackData::_get_trade_days(char *query, map<int/*sn*/, vector<struct day_price_t> > &trade_days)
 {
     sqlite3_stmt* stmt;
     SQL_ASSERT(sqlite3_prepare_v2(m_db, query, strlen(query), &stmt, NULL) == SQLITE_OK);
@@ -173,6 +173,9 @@ void CBackData::_get_trade_days(char *query, map<int, vector<struct day_price_t>
                     sqlite3_column_int(stmt, 7), \
                     sqlite3_column_int(stmt, 8));
 
+            //for debug
+            if (sn == 600703)
+                d.print("600703");
             trade_days[sn].push_back(d);
         }else if(i == SQLITE_DONE){
             break;
@@ -187,11 +190,11 @@ void CBackData::_get_trade_days(char *query, map<int, vector<struct day_price_t>
 
 
 //vector<struct day_price_t> trade_days;
-void CBackData::get_trade_days(int stock_sn, int begin_date, int end_date, vector<struct day_price_t>& trade_days)
+void CBackData::get_trade_days(int sn, int begin_date, int end_date, vector<struct day_price_t>& trade_days)
 {
     char buf[4096];
     snprintf(buf, sizeof(buf), "SELECT rowid, * rowid FROM dayline where sn=%d and date between '%d' and '%d'", \
-            stock_sn, begin_date, end_date);
+            sn, begin_date, end_date);
     _get_trade_days(buf, trade_days);
 }
 
@@ -274,7 +277,7 @@ int CBackData::get_all_sn(vector<int/*sn*/> &snlist)
 int CBackData::get_dp_desc(int sn, int begin, int end, vector<day_price_t> &dp_desc)
 {
     char buf[4096];
-    snprintf(buf, sizeof(buf), "SELECT * FROM dayline where sn=%d and date between '%d' and '%d' ORDER BY date DESC", \
+    snprintf(buf, sizeof(buf), "SELECT rowid, * FROM dayline where sn=%d and date between '%d' and '%d' ORDER BY date DESC", \
             sn, begin, end);
     _get_trade_days(buf, dp_desc);
 
@@ -284,8 +287,10 @@ int CBackData::get_dp_desc(int sn, int begin, int end, vector<day_price_t> &dp_d
 int CBackData::get_dp_desc(int begin, int end, map<int, vector<day_price_t> > &dp_desc)
 {
     char buf[4096];
-    snprintf(buf, sizeof(buf), "SELECT * FROM dayline where date between '%d' and '%d' ORDER BY date DESC", \
+    snprintf(buf, sizeof(buf), "SELECT rowid, * FROM dayline where date between '%d' and '%d' ORDER BY date DESC", \
             begin, end);
+    //for debug
+    INFO("query:%s\n", buf);
     _get_trade_days(buf, dp_desc);
 
     return 0;
@@ -366,24 +371,65 @@ int CBackData::get_point_sn(map<int/*sn*/, vector<point_t> > &sn_list)
     return 0;
 }
 
-int CBackData::get_day_line(int sn, vector<day_price_t> *dplist)
+int CBackData::get_day_line(int sn, map<int/*date*/, day_price_t/*dp*/> &dplist)
 {
     char buf[4096];
     snprintf(buf, sizeof(buf), "SELECT rowid, * FROM dayline WHERE sn=%d ORDER BY date ASC", sn);
-    _get_trade_days(buf, *dplist);
+
+    sqlite3_stmt* stmt;
+    SQL_ASSERT(sqlite3_prepare_v2(m_db, buf, strlen(buf), &stmt, NULL) == SQLITE_OK);
+
+    int num = 0;
+    while(1){
+        int i = sqlite3_step(stmt);
+        if (i == SQLITE_ROW){
+            struct day_price_t d(\
+                    sqlite3_column_int(stmt, 0), /*rowid,id*/ \
+                    atoi((const char *)sqlite3_column_text(stmt, 2)), /*date*/\
+                    sqlite3_column_int(stmt, 3), /*open*/\
+                    sqlite3_column_int(stmt, 4), /*high*/\
+                    sqlite3_column_int(stmt, 5), /*low*/\
+                    sqlite3_column_int(stmt, 6), /*close*/\
+                    sqlite3_column_int(stmt, 7), /*count*/\
+                    sqlite3_column_int(stmt, 8))/*total*/;
+
+            dplist[d.date] = d;
+        }else if(i == SQLITE_DONE){
+            break;
+        }else {
+            ASSERT("SQL Failed.\n");
+        }
+    }
+
+    sqlite3_finalize(stmt);
+
     return 0;
 }
 
 int CBackData::clear_point(point_t *p, day_price_t *dp, int policy)
 {
-    /* lpid, dpid, date, policy, count_percent, price, profit_percent */
+    /* bpid, dpid, date, policy, count_percent, price, profit_percent */
     char buf[4096];
     snprintf(buf, sizeof(buf),
-        "INSERT INTO sp VALUES(%d, %d, '%d', %d, %d);",
-        p->id, dp->id, dp->date, policy, 100, dp->close, (dp->close-p->price)*100/p->price);
+        "INSERT INTO sp VALUES(%d, %d, '%d', %d, %d, %d, %d);",
+        p->id, dp->id, dp->date, policy, 10000, dp->close, (dp->close-p->price)*10000/p->price);
 
+    INFO("found a clear point: %s\n", buf);
     if (sql_stmt(m_db, buf))
         ASSERT("dump_point failed:%s\n", buf);
 }
 
+int CBackData::reset_sp()
+{
+    //drop table first
+    if (sql_stmt(m_db, "DROP TABLE IF EXISTS sp"))
+        ASSERT("Failed to drop table sp");
+
+    //then create table
+    if (sql_stmt(m_db, "CREATE TABLE sp(bpid INTEGER, dpid INTEGER, date DATE, \
+        policy INTEGER, cp INTERGE, price INTEGER, pp INTEGER)"))
+        ASSERT("Failed to create table point");
+
+    return 0;
+}
 

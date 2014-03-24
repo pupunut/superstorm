@@ -132,17 +132,22 @@ void find_low_once(CBackData *db, int begin_date, int end_date, int day_range)
     assert(begin_date);
     assert(end_date);
 
+
     map<int/*sn*/, vector<day_price_t> > dp_desc;
     db->get_dp_desc(begin_date, end_date, dp_desc);
 
     foreach_itt(itt, &dp_desc){
         int sn = itt->first;
         vector<day_price_t> *dplist = &itt->second;
-        if (dplist->size() < day_range)
+        if (dplist->size() < day_range){
+            //INFO("dplist.size:%zd < day_range:%d\n", dplist->size(), day_range);
             continue;
+        }
 
-        if (!filter_in_coarse(dplist))
+        if (!filter_in_coarse(dplist)){
+            //INFO("failed to pass coarse filter, sn:%d\n", sn);
             continue;
+        }
 
         day_price_t *dp = &*dplist->begin();
         point_t p(sn, end_date, dp->open, ENUM_PT_IN, ENUM_PPC_3DROP);
@@ -166,7 +171,7 @@ void find_low(CBackData *db, int head_date, int tail_date)
     }
 
     //prepare for find_low_once
-    int day_range = 3; //search range
+    int day_range = 4; //search range
     vector<point_t> low_points;
     int end_date = tail_date;
     int begin_date = db->get_latest_range(end_date, day_range);
@@ -275,6 +280,6 @@ int main (int argc, char **argv)
     CBackData *db = setup_db(argc, argv);
     assert(db);
 
-    THROW_ASSERT(!db->clear_points());
+    THROW_ASSERT(!db->reset_points());
     find_low(db, lg_head_date, lg_tail_date);
 }

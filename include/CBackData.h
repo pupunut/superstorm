@@ -26,12 +26,13 @@ public:
     int get_prev_date(int date);
     int get_all_sn(vector<int/*sn*/> &snlist);
     int get_point_sn(map<int/*sn*/, vector<point_t> > &sn_list);
-    int get_day_line(int sn, vector<day_price_t> *dplist);
+    int get_day_line(int sn, map<int/*date*/, day_price_t/*dp*/> &dplist);
     int get_dp_desc(int sn, int begin_date, int end_date, vector<day_price_t> &dp_desc);
     int get_dp_desc(int begin, int end, map<int, vector<day_price_t> > &dp_desc);
     int clear_point(point_t *p, day_price_t *dp, int policy);
     void dump_point(point_t *p);
     int reset_points();
+    int reset_sp();
 };
 
 #endif
