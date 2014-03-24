@@ -117,14 +117,16 @@ typedef void (CPosMaster::*pm_unc)();
 typedef void (simulator_func)(CBackData *, int, int, int, int);
 
 typedef enum{
-    ENUM_MPOS = 1,
+    ENUM_NONE = 0,
+    ENUM_MPOS,
     ENUM_TPOS,
     ENUM_T2POS,
     ENUM_POS_TYPE_SIZE
 }pos_type_t;
 
 typedef enum{
-    ENUM_PP_LOW_NRB = 0,
+    ENUM_PP_NONE = 0,
+    ENUM_PP_LOW_NRB,
     ENUM_PP_LOW_RB,
     ENUM_PP_LOW_GAP,
     ENUM_PP_LOW_MD,
@@ -135,7 +137,21 @@ typedef enum{
     ENUM_PP_SIZE
 }point_policy_t;
 
+typedef enum{
+    ENUM_PPC_NONE = 0,
+    ENUM_PPC_3DROP,
+    ENUM_PPC_SIZE
+}point_policy_coarse_t;
+
+typedef enum{
+    ENUM_PT_NONE = 0,
+    ENUM_PT_IN,
+    ENUM_PT_OUT,
+    ENUM_PT_SIZE
+}point_type_t;
+
 static const char *point_policy[] = {
+    "NONE"
     "NRB",
     "RB",
     "GAP",
@@ -144,11 +160,6 @@ static const char *point_policy[] = {
     "RB",
     "GAP",
     "MD"
-};
-
-enum{
-    ENUM_POINT_IN = 0,
-    ENUM_POINT_OUT
 };
 
 enum{
@@ -194,29 +205,45 @@ struct point_t{
     int sn;
     int date;
     int price;
-    int type; //0 - in, 1 - out
-    point_policy_t policy;
+    point_type_t type;
+    point_policy_t fine;
+    point_policy_coarse_t coarse;
     point_t () {}
-    point_t (int sn, int date, int price, int type, point_policy_t policy)
+    point_t (int sn, int date, int price, point_type_t type, point_policy_coarse_t coarse)
     {
         this->sn = sn;
         this->date = date;
         this->price = price;
         this->type = type;
-        this->policy = policy;
+        this->fine = ENUM_PP_NONE;
+        this->coarse = coarse;
+    }
+
+    point_t (int sn, int date, int price, point_type_t type, point_policy_coarse_t coarse, point_policy_t fine)
+    {
+        this->sn = sn;
+        this->date = date;
+        this->price = price;
+        this->type = type;
+        this->coarse = coarse;
+        this->fine = fine;
     }
 
     bool operator < (const point_t& p) const {
-        if (policy == p.policy)
-            return sn < p.sn;
-        else
-            return policy < p.policy;
+        if (coarse == p.coarse){
+            if (fine == p.fine)
+                return sn < p.sn;
+            else
+                return fine < p.fine;
+        }else {
+            return coarse < p.coarse;
+        }
     }
 
     void print(const char *msg)
     {
         fprintf(stderr, "%s: point, sn:%06d, p:%s, date:%d, open:%d, type:%d\n",
-                msg, sn, point_policy[policy], date, price, type);
+                msg, sn, point_policy[fine], date, price, type);
     }
 
 };

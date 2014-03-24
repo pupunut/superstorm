@@ -46,9 +46,9 @@ bool test_drop_3d(vector<day_price_t> *dp_desc)
     return ret;
 }
 
-bool test_low_nrb(vector<day_price_t> *dp_desc)
+bool test_low_nrb(point_policy_coarse_t type, vector<day_price_t> *dp_desc)
 {
-    if (false == test_drop_3d(dp_desc))
+    if (type != ENUM_PPC_3DROP) //only support 3DROP coarse filter now
         return false;
 
     //lastest day is nrb
@@ -72,9 +72,9 @@ bool test_low_nrb(vector<day_price_t> *dp_desc)
     return true;
 }
 
-bool test_low_rb(vector<day_price_t> *dp_desc)
+bool test_low_rb(point_policy_coarse_t type, vector<day_price_t> *dp_desc)
 {
-    if (false == test_drop_3d(dp_desc))
+    if (type != ENUM_PPC_3DROP) //only support 3DROP coarse filter now
         return false;
 
     //lastest day is rb
@@ -95,41 +95,42 @@ bool test_low_rb(vector<day_price_t> *dp_desc)
     return true;
 }
 
-bool test_low_gap(vector<day_price_t> *dp_desc)
+bool test_low_gap(point_policy_coarse_t type, vector<day_price_t> *dp_desc)
 {
     return false; //TBD
 }
 
-bool test_low_md(vector<day_price_t> *dp_desc)
+bool test_low_md(point_policy_coarse_t type, vector<day_price_t> *dp_desc)
 {
     return false; //TBD
 }
 
-point_policy_t _find_current_low(vector<day_price_t> *dp_desc)
+point_policy_t filter_in_fine(point_policy_coarse_t type, vector<day_price_t> *dp_desc)
 {
     //test if the date is a valid trading date
     //alldp is in descending order
 
-    if (test_low_nrb(dp_desc))
+    if (test_low_nrb(type, dp_desc))
         return ENUM_PP_LOW_NRB;
-    if (test_low_rb(dp_desc))
+    if (test_low_rb(type, dp_desc))
         return ENUM_PP_LOW_RB;
-    if (test_low_gap(dp_desc))
+    if (test_low_gap(type, dp_desc))
         return ENUM_PP_LOW_GAP;
-    if (test_low_md(dp_desc))
+    if (test_low_md(type, dp_desc))
         return ENUM_PP_LOW_MD;
 
     return ENUM_PP_SIZE;
 }
 
-void find_current_low(CBackData *db, int end_date, vector<point_t> *low_points)
+bool filter_in_coarse(vector<day_price_t> *dp_desc)
 {
-    int day_range = 3;
-    vector<int/*stock sn*/> allset;
-    //get last date
-    if (!end_date)
-        end_date = db->get_latest_date();
-    int begin_date = db->get_latest_range(end_date, day_range);
+    return test_drop_3d(dp_desc);
+}
+
+void find_low_once(CBackData *db, int begin_date, int end_date, int day_range)
+{
+    assert(begin_date);
+    assert(end_date);
 
     map<int/*sn*/, vector<day_price_t> > dp_desc;
     db->get_dp_desc(begin_date, end_date, dp_desc);
@@ -137,22 +138,50 @@ void find_current_low(CBackData *db, int end_date, vector<point_t> *low_points)
     foreach_itt(itt, &dp_desc){
         int sn = itt->first;
         vector<day_price_t> *dplist = &itt->second;
-        if (dplist->size() < day_range){
-            //INFO("%d has no %d trading days before %d\n", sn, day_range, end_date);
+        if (dplist->size() < day_range)
             continue;
-        }
 
-        point_policy_t ret = _find_current_low(dplist);
-        if (ret != ENUM_PP_SIZE){
+        if (!filter_in_coarse(dplist))
+            continue;
+
+        day_price_t *dp = &*dplist->begin();
+        point_t p(sn, end_date, dp->open, ENUM_PT_IN, ENUM_PPC_3DROP);
+        db->dump_point(&p);
+
+        point_policy_t policy = filter_in_fine(ENUM_PPC_3DROP, dplist);
+        if (policy != ENUM_PP_SIZE){
             day_price_t *dp = &*dplist->begin();
-            point_t p(sn, end_date, dp->open, 0, ret);
-            low_points->push_back(p);
+            point_t p(sn, end_date, dp->open, ENUM_PT_IN, ENUM_PPC_3DROP, policy);
+            db->dump_point(&p);
         }
     }
 }
 
+void find_low(CBackData *db, int head_date, int tail_date)
+{
+    //get last date
+    if (!tail_date){
+        tail_date = db->get_latest_date();
+        head_date = 0; //if end_date equals zero, then begin_date is invalid
+    }
+
+    //prepare for find_low_once
+    int day_range = 3; //search range
+    vector<point_t> low_points;
+    int end_date = tail_date;
+    int begin_date = db->get_latest_range(end_date, day_range);
+    INFO("end_date:%d, begin_date:%d\n", end_date, begin_date);
+    do {
+        find_low_once(db, begin_date, end_date, day_range);
+        end_date = db->get_prev_date(end_date);
+        begin_date = db->get_latest_range(end_date, day_range);
+        INFO("next end_date:%d, begin_date:%d\n", end_date, begin_date);
+    }while (begin_date > head_date);
+}
+
 static int verbose_flag;
-static int lg_end_date = 0;
+static int lg_head_date = 0;
+static int lg_tail_date = 0;
 CBackData *setup_db(int argc, char *argv[])
 {
     char *db_path = NULL;
@@ -170,13 +199,14 @@ CBackData *setup_db(int argc, char *argv[])
             /* These options don't set a flag.
                We distinguish them by their indices. */
             {"db",    required_argument, 0, 'd'},
-            {"end",  required_argument, 0, 'e'},
+            {"head",  required_argument, 0, 'a'},
+            {"tail",  required_argument, 0, 't'},
             {0, 0, 0, 0}
         };
         /* getopt_long stores the option index here. */
         int option_index = 0;
 
-        c = getopt_long (argc, argv, "d:e:",
+        c = getopt_long (argc, argv, "a:d:t:",
                 long_options, &option_index);
 
         /* Detect the end of the options. */
@@ -194,13 +224,17 @@ CBackData *setup_db(int argc, char *argv[])
                     printf (" with arg %s", optarg);
                 printf ("\n");
                 break;
+            case 'a':
+                printf ("head date: %s\n", optarg);
+                lg_head_date = atoi(optarg);
+                break;
             case 'd':
                 printf ("database: %s\n", optarg);
                 db_path = optarg;
                 break;
-            case 'e':
-                printf ("end date: %s\n", optarg);
-                lg_end_date = atoi(optarg);
+            case 't':
+                printf ("tail date: %s\n", optarg);
+                lg_tail_date = atoi(optarg);
                 break;
             case '?':
                 /* getopt_long already printed an error message. */
@@ -227,7 +261,7 @@ CBackData *setup_db(int argc, char *argv[])
     }
 
     if (!db_path){
-        fprintf(stderr, "Usage: %s -d db_path [-e end_date]\n", argv[0]);
+        fprintf(stderr, "Usage: %s -d db_path [-t tail_date [-a head_date]]\n", argv[0]);
         exit(-1);
     }
 
@@ -241,11 +275,6 @@ int main (int argc, char **argv)
     CBackData *db = setup_db(argc, argv);
     assert(db);
 
-    vector<point_t> low_points;
-    find_current_low(db, lg_end_date, &low_points);
-
-    sort(low_points.begin(), low_points.end());
-    foreach_itt(itt, &low_points){
-        (*itt).print("IN");
-    }
+    THROW_ASSERT(!db->clear_points());
+    find_low(db, lg_head_date, lg_tail_date);
 }

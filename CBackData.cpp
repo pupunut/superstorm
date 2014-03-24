@@ -21,6 +21,28 @@ do { \
     }\
 } while (0)
 
+/*
+ * execute a stmt at once
+ */
+int sql_stmt(sqlite3 *db, const char* stmt)
+{
+    char *errmsg;
+    int   ret;
+
+    THROW_ASSERT(db, "NULL db");
+    ret = sqlite3_exec(db, stmt, 0, 0, &errmsg);
+
+    if(ret != SQLITE_OK) {
+        ERROR("Error in statement: %s [%s].\n", stmt, errmsg);
+        sqlite3_free(errmsg);
+        return -1;
+    }
+
+    sqlite3_free(errmsg);
+    return 0;
+}
+
+
 
 int open_db(const char *m_path, sqlite3 **db)
 {
@@ -208,6 +230,19 @@ int CBackData::get_latest_range(int date, int range)
     return begin_date;
 }
 
+int CBackData::get_prev_date(int date)
+{
+    char buf[4096];
+    sqlite3_stmt* stmt;
+    snprintf(buf, sizeof(buf), "SELECT min(date) FROM (SELECT distinct(date) FROM dayline WHERE date < '%d' ORDER BY date DESC LIMIT 2)", date);
+    SQL_ASSERT(sqlite3_prepare_v2(m_db, buf, strlen(buf), &stmt, NULL) == SQLITE_OK);
+    SQL_ASSERT(sqlite3_step(stmt) == SQLITE_ROW); //should be only one row
+
+    int prev = sqlite3_column_int(stmt, 0);
+    sqlite3_finalize(stmt);
+
+    return prev;
+}
 
 int CBackData::get_all_sn(vector<int/*sn*/> &snlist)
 {
@@ -250,5 +285,30 @@ int CBackData::get_dp_desc(int begin, int end, map<int, vector<day_price_t> > &d
     _get_trade_days(buf, dp_desc);
 
     return 0;
+}
+
+int CBackData::clear_points()
+{
+    //drop table first
+    if (sql_stmt(m_db, "DROP TABLE IF EXISTS point"))
+        ASSERT("Failed to drop table point");
+
+    //then create table
+    if (sql_stmt(m_db, "CREATE TABLE point(sn INTEGER, date DATE, \
+        price INTEGER, type INTEGER, coarse INTEGER, fine INTEGER)"))
+        ASSERT("Failed to create table point");
+
+    return 0;
+}
+
+void CBackData::dump_point(point_t *p)
+{
+    char buf[4096];
+    snprintf(buf, sizeof(buf),
+        "INSERT INTO point VALUES(%d, '%d', %d, %d, %d, %d);",
+        p->sn, p->date, p->price, p->type, p->coarse, p->fine);
+
+    if (sql_stmt(m_db, buf))
+        ASSERT("dump_point failed:%s\n", buf);
 }
 

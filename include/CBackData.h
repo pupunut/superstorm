@@ -2,6 +2,7 @@
 #define _CBACK_DATA_H_
 
 #include <string>
+#include "Comm.h"
 
 using namespace std;
 
@@ -22,9 +23,12 @@ public:
     void get_trade_days(int stock_sn, int begin_date, vector<struct day_price_t>& trade_days);
     int get_latest_date();
     int get_latest_range(int date, int range);
+    int get_prev_date(int date);
     int get_all_sn(vector<int/*sn*/> &snlist);
     int get_dp_desc(int sn, int begin_date, int end_date, vector<day_price_t> &dp_desc);
     int get_dp_desc(int begin, int end, map<int, vector<day_price_t> > &dp_desc);
+    int clear_points();
+    void dump_point(point_t *p);
 };
 
 #endif
