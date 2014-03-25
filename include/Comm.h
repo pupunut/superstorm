@@ -153,6 +153,9 @@ typedef enum{
 typedef enum{
     ENUM_SP_NONE = 0,
     ENUM_SP_3D,
+    ENUM_SP_5D,
+    ENUM_SP_10D,
+    ENUM_SP_20D,
     ENUM_SP_SIZE
 }short_policy_t;
 

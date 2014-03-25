@@ -19,11 +19,50 @@ static int verbose_flag;
 static int lg_head_date = 0;
 static int lg_tail_date = 0;
 static CBackData *lg_db = NULL;
+static char *lg_policy = NULL;
 
 void eval_bp_single_3s(point_t *p, map<int/*date*/, day_price_t> *dp)
 {
     return ;
 }
+
+void eval_bp_single_xd(int xd, point_t *p, map<int/*date*/, day_price_t> *dp)
+{
+    typeof (dp->begin()) it = dp->find(p->date);
+    if (it == dp->end()){
+        ERROR("Should found this point in dayline:\n");
+        p->print("");
+        assert(0);
+    }
+
+    //the five day after point
+    for (int i = 0; i < (xd - 1); i++){
+        it++;
+        if (it == dp->end())
+            return;
+    }
+
+    int type;
+    switch (xd){
+        case 3:
+            type = ENUM_SP_3D;
+            break;
+        case 5:
+            type = ENUM_SP_5D;
+            break;
+        case 10:
+            type = ENUM_SP_10D;
+            break;
+        case 20:
+            type = ENUM_SP_20D;
+            break;
+        default:
+            ASSERT("Unknown type:%d\n", xd);
+    }
+
+    lg_db->clear_point(p, &it->second, type);
+}
+
 
 void eval_bp_single_3d(point_t *p, map<int/*date*/, day_price_t> *dp)
 {
@@ -35,7 +74,12 @@ void eval_bp_single_3d(point_t *p, map<int/*date*/, day_price_t> *dp)
     }
 
     //it = it + 2; //the third day after point
-    it++;it++; //the third day after point
+    for (int i = 0; i < 2; i++){
+        it++;
+        if (it == dp->end())
+            return;
+    }
+
     lg_db->clear_point(p, &it->second, ENUM_SP_3D);
 }
 
@@ -46,8 +90,13 @@ void eval_bp_single(int sn, vector<point_t> &plist)
 
     foreach_itt(itt, &plist){
         point_t *p = &*itt;
-        eval_bp_single_3d(p, &dayline);
-        eval_bp_single_3s(p, &dayline);
+        if (!lg_policy){//run with every policy
+            eval_bp_single_xd(3, p, &dayline);
+            eval_bp_single_xd(5, p, &dayline);
+            eval_bp_single_xd(10, p, &dayline);
+            eval_bp_single_xd(20, p, &dayline);
+            eval_bp_single_3s(p, &dayline);
+        }
     }
 }
 
@@ -68,10 +117,8 @@ void eval_bp()
 CBackData *setup_db(int argc, char *argv[])
 {
     char *db_path = NULL;
-    int stock_sn, begin_date, end_date, policy;
 
     int c;
-
     while (1)
     {
         static struct option long_options[] =
@@ -82,12 +129,13 @@ CBackData *setup_db(int argc, char *argv[])
             /* These options don't set a flag.
                We distinguish them by their indices. */
             {"db",    required_argument, 0, 'd'},
+            {"policy", required_argument, 0, 'p'},
             {0, 0, 0, 0}
         };
         /* getopt_long stores the option index here. */
         int option_index = 0;
 
-        c = getopt_long (argc, argv, "d:",
+        c = getopt_long (argc, argv, "d:p:",
                 long_options, &option_index);
 
         /* Detect the end of the options. */
@@ -108,6 +156,10 @@ CBackData *setup_db(int argc, char *argv[])
             case 'd':
                 printf ("database: %s\n", optarg);
                 db_path = optarg;
+                break;
+            case 'p':
+                printf ("policy: %s\n", optarg);
+                lg_policy = optarg;
                 break;
             case '?':
                 /* getopt_long already printed an error message. */

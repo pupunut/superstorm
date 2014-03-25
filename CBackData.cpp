@@ -141,6 +141,7 @@ void CBackData::_get_trade_days(char *query, vector<struct day_price_t>& trade_d
                     sqlite3_column_int(stmt, 7), \
                     sqlite3_column_int(stmt, 8));
 
+            THROW_ASSERT(d.id);
             trade_days.push_back(d);
         }else if(i == SQLITE_DONE){
             break;
@@ -173,9 +174,7 @@ void CBackData::_get_trade_days(char *query, map<int/*sn*/, vector<struct day_pr
                     sqlite3_column_int(stmt, 7), \
                     sqlite3_column_int(stmt, 8));
 
-            //for debug
-            if (sn == 600703)
-                d.print("600703");
+            THROW_ASSERT(d.id);
             trade_days[sn].push_back(d);
         }else if(i == SQLITE_DONE){
             break;
@@ -289,8 +288,6 @@ int CBackData::get_dp_desc(int begin, int end, map<int, vector<day_price_t> > &d
     char buf[4096];
     snprintf(buf, sizeof(buf), "SELECT rowid, * FROM dayline where date between '%d' and '%d' ORDER BY date DESC", \
             begin, end);
-    //for debug
-    INFO("query:%s\n", buf);
     _get_trade_days(buf, dp_desc);
 
     return 0;
@@ -311,6 +308,9 @@ int CBackData::get_dp_desc_period(int sn, int begin, int days, vector<day_price_
 int CBackData::reset_points()
 {
     //drop table first
+    if (sql_stmt(m_db, "DROP VIEW IF EXISTS view_sp"))
+        ASSERT("Failed to drop view view_sp");
+
     if (sql_stmt(m_db, "DROP TABLE IF EXISTS point"))
         ASSERT("Failed to drop table point");
 
@@ -319,7 +319,11 @@ int CBackData::reset_points()
         price INTEGER, type INTEGER, coarse INTEGER, fine INTEGER)"))
         ASSERT("Failed to create table point");
 
-    return 0;
+    if (sql_stmt(m_db, "CREATE VIEW view_sp as select a.*, \
+                dayline.open, dayline.close from \
+                (select * from sp join point on sp.bpid=point.rowid) \
+                as a join dayline on a.dpid=dayline.rowid"))
+        ASSERT("Failed to create table point");
 }
 
 char *to_date(int date, char *buf)
@@ -393,6 +397,7 @@ int CBackData::get_day_line(int sn, map<int/*date*/, day_price_t/*dp*/> &dplist)
                     sqlite3_column_int(stmt, 7), /*count*/\
                     sqlite3_column_int(stmt, 8))/*total*/;
 
+            THROW_ASSERT(d.id);
             dplist[d.date] = d;
         }else if(i == SQLITE_DONE){
             break;
@@ -414,7 +419,8 @@ int CBackData::clear_point(point_t *p, day_price_t *dp, int policy)
         "INSERT INTO sp VALUES(%d, %d, '%d', %d, %d, %d, %d);",
         p->id, dp->id, dp->date, policy, 10000, dp->close, (dp->close-p->price)*10000/p->price);
 
-    INFO("found a clear point: %s\n", buf);
+    THROW_ASSERT(dp->id);
+    //INFO("found a clear point: %s\n", buf);
     if (sql_stmt(m_db, buf))
         ASSERT("dump_point failed:%s\n", buf);
 }

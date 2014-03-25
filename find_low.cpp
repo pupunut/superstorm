@@ -17,13 +17,13 @@ using namespace std;
 
 //1. dplist is ordering in des
 //2. the test do not include the first day in dplist
-bool test_drop_3d(vector<day_price_t> *dp_desc)
+bool test_drop_3d(vector<day_price_t> &dp_desc)
 {
     bool ret = true;
 
-    typeof(dp_desc->begin()) it_begin = dp_desc->begin() + 1;
-    typeof(dp_desc->begin()) it_end = it_begin + 3 - 1; //3 days defore the current day
-    typeof(dp_desc->begin()) it;
+    typeof(dp_desc.begin()) it_begin = dp_desc.begin() + 2; //curr day->nrb day->3 drop days
+    typeof(dp_desc.begin()) it_end = it_begin + 3 - 1; //3 days defore the current day
+    typeof(dp_desc.begin()) it;
 
     //must drop every day
     for (it = it_begin; it <= it_end; it++){
@@ -46,14 +46,14 @@ bool test_drop_3d(vector<day_price_t> *dp_desc)
     return ret;
 }
 
-bool test_low_nrb(point_policy_coarse_t type, vector<day_price_t> *dp_desc)
+bool test_low_nrb(point_policy_coarse_t type, vector<day_price_t> &dp_desc)
 {
     if (type != ENUM_PPC_3DROP) //only support 3DROP coarse filter now
         return false;
 
-    //lastest day is nrb
-    day_price_t *c = &(*dp_desc->begin());
-    day_price_t *p = &(*(dp_desc->begin() + 1));
+    //(lastest -1) day is nrb
+    day_price_t *c = &*(dp_desc.begin() + 1);
+    day_price_t *p = &*(dp_desc.begin() + 2);
 
     //the body of curr_dp is shadowed by priv_dp
     //and the range of curr_dp is less than 1/2 of that of priv_dp
@@ -72,13 +72,13 @@ bool test_low_nrb(point_policy_coarse_t type, vector<day_price_t> *dp_desc)
     return true;
 }
 
-bool test_low_rb(point_policy_coarse_t type, vector<day_price_t> *dp_desc)
+bool test_low_rb(point_policy_coarse_t type, vector<day_price_t> &dp_desc)
 {
     if (type != ENUM_PPC_3DROP) //only support 3DROP coarse filter now
         return false;
 
-    //lastest day is rb
-    day_price_t *c = &(*dp_desc->begin());
+    //(lastest -1) day is nrb
+    day_price_t *c = &*(dp_desc.begin() + 1);
 
     //curr_dp is going up
     if (c->open >= c->close)
@@ -95,17 +95,17 @@ bool test_low_rb(point_policy_coarse_t type, vector<day_price_t> *dp_desc)
     return true;
 }
 
-bool test_low_gap(point_policy_coarse_t type, vector<day_price_t> *dp_desc)
+bool test_low_gap(point_policy_coarse_t type, vector<day_price_t> &dp_desc)
 {
     return false; //TBD
 }
 
-bool test_low_md(point_policy_coarse_t type, vector<day_price_t> *dp_desc)
+bool test_low_md(point_policy_coarse_t type, vector<day_price_t> &dp_desc)
 {
     return false; //TBD
 }
 
-point_policy_t filter_in_fine(point_policy_coarse_t type, vector<day_price_t> *dp_desc)
+point_policy_t filter_in_fine(point_policy_coarse_t type, vector<day_price_t> &dp_desc)
 {
     //test if the date is a valid trading date
     //alldp is in descending order
@@ -122,7 +122,7 @@ point_policy_t filter_in_fine(point_policy_coarse_t type, vector<day_price_t> *d
     return ENUM_PP_SIZE;
 }
 
-bool filter_in_coarse(vector<day_price_t> *dp_desc)
+bool filter_in_coarse(vector<day_price_t> &dp_desc)
 {
     return test_drop_3d(dp_desc);
 }
@@ -144,7 +144,7 @@ void find_low_once(CBackData *db, int begin_date, int end_date, int day_range)
             continue;
         }
 
-        if (!filter_in_coarse(dplist)){
+        if (!filter_in_coarse(*dplist)){
             //INFO("failed to pass coarse filter, sn:%d\n", sn);
             continue;
         }
@@ -153,7 +153,7 @@ void find_low_once(CBackData *db, int begin_date, int end_date, int day_range)
         point_t p(sn, end_date, dp->open, ENUM_PT_IN, ENUM_PPC_3DROP);
         db->dump_point(&p);
 
-        point_policy_t policy = filter_in_fine(ENUM_PPC_3DROP, dplist);
+        point_policy_t policy = filter_in_fine(ENUM_PPC_3DROP, *dplist);
         if (policy != ENUM_PP_SIZE){
             day_price_t *dp = &*dplist->begin();
             point_t p(sn, end_date, dp->open, ENUM_PT_IN, ENUM_PPC_3DROP, policy);
@@ -171,7 +171,7 @@ void find_low(CBackData *db, int head_date, int tail_date)
     }
 
     //prepare for find_low_once
-    int day_range = 4; //search range
+    int day_range = 5; //search range, curr day->nrb day->3 drop days
     vector<point_t> low_points;
     int end_date = tail_date;
     int begin_date = db->get_latest_range(end_date, day_range);
