@@ -37,7 +37,8 @@ void eval_bp_single_3s(point_t *p, map<int/*date*/, day_price_t> *dp)
     if (it == dp->end()){
         ERROR("Should found this point in dayline:\n");
         p->print("");
-        assert(0);
+        //assert(0);
+        return;
     }
 
     int num;
@@ -70,7 +71,8 @@ void eval_bp_single_xd(int xd, point_t *p, map<int/*date*/, day_price_t> *dp)
     if (it == dp->end()){
         ERROR("Should found this point in dayline:\n");
         p->print("");
-        assert(0);
+        //assert(0);
+        return;
     }
 
     //the xd days after point
@@ -131,8 +133,8 @@ void eval_bp_single(int sn, vector<point_t> &plist)
         if (!lg_policy){//run with every policy
             eval_bp_single_xd(3, p, &dayline);
             eval_bp_single_xd(5, p, &dayline);
-            eval_bp_single_xd(10, p, &dayline);
-            eval_bp_single_xd(20, p, &dayline);
+            //eval_bp_single_xd(10, p, &dayline);
+            //eval_bp_single_xd(20, p, &dayline);
             eval_bp_single_3s(p, &dayline);
         }
     }
@@ -240,4 +242,5 @@ int main (int argc, char **argv)
 
     lg_db->reset_sp();
     eval_bp();
+    lg_db->create_view_sp();
 }

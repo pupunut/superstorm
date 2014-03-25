@@ -314,12 +314,17 @@ void CBackData::reset_point()
         price INTEGER, count INTEGER, type INTEGER, coarse INTEGER, fine INTEGER)"))
         ASSERT("Failed to create table point");
 
+}
+
+void CBackData::create_view_sp()
+{
     if (sql_stmt(m_db, "CREATE VIEW view_sp as select a.*, \
                 dayline.open, dayline.close from \
-                (select * from sp join point on sp.bpid=point.rowid) \
+                (select point.sn, * from sp join point on sp.bpid=point.rowid) \
                 as a join dayline on a.dpid=dayline.rowid"))
         ASSERT("Failed to create table point");
 }
+
 
 char *to_date(int date, char *buf)
 {
@@ -437,7 +442,7 @@ void CBackData::reset_sp(point_t *p, int policy)
     /* bpid, dpid, date, policy, count_percent, price, profit_percent */
     char buf[4096];
     snprintf(buf, sizeof(buf),
-        "DELETE FROM sp WHERE bpid=%d and policy=%d);", p->id, policy);
+        "DELETE FROM sp WHERE bpid=%d and policy=%d;", p->id, policy);
 
     if (sql_stmt(m_db, buf))
         ASSERT("reset sp failed:%s\n", buf);
@@ -448,6 +453,8 @@ void CBackData::reset_sp()
     //drop table first
     if (sql_stmt(m_db, "DROP TABLE IF EXISTS sp"))
         ASSERT("Failed to drop table sp");
+    if (sql_stmt(m_db, "DROP VIEW IF EXISTS view_sp"))
+        ASSERT("Failed to drop view view_sp");
 
     //then create table
     if (sql_stmt(m_db, "CREATE TABLE sp(bpid INTEGER, dpid INTEGER, date DATE, \

@@ -35,6 +35,7 @@ public:
     void reset_sp(point_t *p, int policy);
     void reset_point();
     void reset_sp();
+    void create_view_sp();
 };
 
 #endif

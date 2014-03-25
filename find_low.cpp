@@ -58,14 +58,17 @@ bool test_low_nrb(point_policy_coarse_t type, vector<day_price_t> &dp_desc)
     //the body of curr_dp is shadowed by priv_dp
     //and the range of curr_dp is less than 1/2 of that of priv_dp
     //for debug
-    if (c->get_range() >= p->get_range())
+    if (c->get_range() >= (p->get_range()*0.67))
+        return false;
+
+    if (c->get_body() >= p->get_body())
         return false;
 
     if (c->open < c->close){ //red
-        if (c->open < p->close)
+        if (c->high >= p->high || c->close <= p->close)
             return false;
     }else { //blue
-        if (c->low <= p->low)
+        if (c->high >= p->high || c->low <= p->low)
         return false;
     }
 
@@ -79,6 +82,7 @@ bool test_low_rb(point_policy_coarse_t type, vector<day_price_t> &dp_desc)
 
     //(lastest -1) day is nrb
     day_price_t *c = &*(dp_desc.begin() + 1);
+    day_price_t *p = &*dp_desc.begin();
 
     //curr_dp is going up
     if (c->open >= c->close)
@@ -89,8 +93,13 @@ bool test_low_rb(point_policy_coarse_t type, vector<day_price_t> &dp_desc)
         return false;
 
     //curr_dp has a long bottom tail
-    if (c->get_bottom_tail() <= c->get_body()/2)
+    if (c->get_bottom_tail() <= c->get_body())
         return false;
+
+    //open of curr_pd must less than open of prev_pd, cite: 002576 20140313
+    if (c->open >= p->open)
+        return false;
+
 
     return true;
 }
