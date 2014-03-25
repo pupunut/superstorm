@@ -21,8 +21,46 @@ static int lg_tail_date = 0;
 static CBackData *lg_db = NULL;
 static char *lg_policy = NULL;
 
+int get_short_count(point_t *p, int step)
+{
+    int count = p->count/step;
+    if ((p->curr_count - count) < count) //left count less than 1 short
+        count = p->curr_count; //short all, that is clearing the point
+
+    return count;
+}
+
 void eval_bp_single_3s(point_t *p, map<int/*date*/, day_price_t> *dp)
 {
+    int step = 3;
+    typeof (dp->begin()) it = dp->find(p->date);
+    if (it == dp->end()){
+        ERROR("Should found this point in dayline:\n");
+        p->print("");
+        assert(0);
+    }
+
+    int num;
+    typeof (dp->begin()) it_prev = it;
+    for (num = 0, it++; it != dp->end() && num < step; it++, it_prev++){
+        day_price_t *today = &it->second;
+        day_price_t *yesterday = &it_prev->second;
+        if (yesterday->is_red()){
+            if (today->open < yesterday->open){
+                lg_db->short_point(p, today, ENUM_SP_3S, get_short_count(p, step));
+                num++;
+            }
+        }else {
+            if (today->open < yesterday->close){
+                lg_db->short_point(p, today, ENUM_SP_3S, get_short_count(p, step));
+                num++;
+            }
+        }
+    }
+
+    if (num < step)
+        lg_db->reset_sp(p, ENUM_SP_3S);
+
     return ;
 }
 
@@ -35,7 +73,7 @@ void eval_bp_single_xd(int xd, point_t *p, map<int/*date*/, day_price_t> *dp)
         assert(0);
     }
 
-    //the five day after point
+    //the xd days after point
     for (int i = 0; i < (xd - 1); i++){
         it++;
         if (it == dp->end())
@@ -200,6 +238,6 @@ int main (int argc, char **argv)
     lg_db = setup_db(argc, argv);
     assert(lg_db);
 
-    THROW_ASSERT(!lg_db->reset_sp());
+    lg_db->reset_sp();
     eval_bp();
 }

@@ -156,6 +156,7 @@ typedef enum{
     ENUM_SP_5D,
     ENUM_SP_10D,
     ENUM_SP_20D,
+    ENUM_SP_3S,
     ENUM_SP_SIZE
 }short_policy_t;
 
@@ -221,6 +222,9 @@ struct day_price_t{
     int get_range() { return high - low; }
     int get_top_tail() { return open > close ? high - open : high - close; }
     int get_bottom_tail() { return open > close ? close - low : open - low; }
+    bool is_red() { return open < close; }
+    bool is_cross() { return open == close; }
+    bool is_blue() { return open > close; }
 };
 
 struct point_t{
@@ -228,6 +232,8 @@ struct point_t{
     int sn;
     int date;
     int price;
+    int count;
+    int curr_count;
     point_type_t type;
     point_policy_t fine;
     point_policy_coarse_t coarse;
@@ -240,6 +246,7 @@ struct point_t{
         this->type = type;
         this->fine = ENUM_PP_NONE;
         this->coarse = coarse;
+        count = curr_count = 0;
     }
 
     point_t (int sn, int date, int price, point_type_t type, point_policy_coarse_t coarse, point_policy_t fine)
@@ -250,9 +257,10 @@ struct point_t{
         this->type = type;
         this->coarse = coarse;
         this->fine = fine;
+        count = curr_count = 0;
     }
 
-    point_t (int id, int sn, int date, int price, point_type_t type, point_policy_coarse_t coarse, point_policy_t fine)
+    point_t (int id, int sn, int date, int price, int count, point_type_t type, point_policy_coarse_t coarse, point_policy_t fine)
     {
         this->id = id;
         this->sn = sn;
@@ -261,6 +269,8 @@ struct point_t{
         this->type = type;
         this->coarse = coarse;
         this->fine = fine;
+        this->count = count;
+        this->curr_count = count;
     }
 
 

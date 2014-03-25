@@ -280,6 +280,6 @@ int main (int argc, char **argv)
     CBackData *db = setup_db(argc, argv);
     assert(db);
 
-    THROW_ASSERT(!db->reset_points());
+    db->reset_point();
     find_low(db, lg_head_date, lg_tail_date);
 }
