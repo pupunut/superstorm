@@ -150,6 +150,16 @@ EOF
 --EOF--
 }
 
+function view_bpn
+{
+    echo "==================="
+    echo "bpn"
+    echo "==================="
+
+    local bpn=$(sqlite3 $db "select sn from bpn;")
+    for i in $(echo $bpn); do printf %06d\\n $i; done
+}
+
 function env_init()
 {
     #create log dir
@@ -165,12 +175,19 @@ function env_init()
     tmpfile="/tmp/$(basename $0 .sh).tmp"
 
     find_low="${0%/*}/find_low"
+    find_bpn="${0%/*}/find_bpn"
     eval_bp="${0%/*}/eval_bp"
 
     if [ ! -x "$find_low" ]; then
         find_low=${find_low##*/}
         find_low=$(which $find_low) || DIE "Cannot find $find_low"
     fi
+
+    if [ ! -x "$find_bpn" ]; then
+        find_bpn=${find_bpn##*/}
+        find_bpn=$(which $find_bpn) || DIE "Cannot find $find_bpn"
+    fi
+
 
     if [ ! -x "$eval_bp" ]; then
         eval_bp=${eval_bp##*/}
@@ -185,7 +202,8 @@ function usage()
     echo "Usage:"
     echo "	#1) ${PROGNAME} -d db -y year [-m month] [-v]"
     echo "	#2) ${PROGNAME} -d db -a head-day -t tail-day"
-    echo "	#3) ${PROGNAME} -h"
+    echo "	#3) ${PROGNAME} -d db -n -t tail-day"
+    echo "	#4) ${PROGNAME} -h"
 }
 
 function helptext()
@@ -214,6 +232,13 @@ function helptext()
         -t tail-day \$tail-day as is
 
         [Usage #3]
+        Run find and eval between two days.
+        ${PROGNAME} -d db -n -t tail-day
+        -d db       \$db is full path of dayline db
+        -t tail-day \$tail-day as is
+        -n          find bpn flag
+
+        [Usage #4]
         Display this help message and exit.
         ${PROGNAME} -h
 -EOF-
@@ -231,19 +256,22 @@ month=""
 head_day=""
 tail_day=""
 param=""
+bpn_flag=""
 
 if [ "$#" -eq 0 ]; then
 	usage
 	exit 0
 fi
 
-while getopts "d:y:m:a:t:vh" opt; do
+while getopts "d:y:m:a:t:nvh" opt; do
         case $opt in
 		a )     head_day=${OPTARG}
 			;;
                 d )     db=${OPTARG}
                         ;;
                 m )     month="${OPTARG}"
+                        ;;
+                n )     bpn_flag=true;
                         ;;
                 t )     tail_day="${OPTARG}"
                         ;;
@@ -306,15 +334,21 @@ if [ -n "$head_day" ]; then
 fi
 
 if [ -n "$tail_day" ]; then
-    [[ -n "$head_day" ]] || DIE "Should provide head_day"
+    if [ -n "bpn_flag" ]; then
+        [[ -n "$head_day" ]] || DIE "Should provide head_day"
+    fi
     CMD isdate $tail_day || DIE "Invalid format or date of tail_day:$tail_day"
     param="${param} -t${tail_day}"
 fi
 
-
-CMD $find_low $param || DIE "Failed to run $find_low $param" 
-CMD $eval_bp -d $db || DIE "Failed to run $eval_bp -d $db"
-CMD create_report || DIE "Failed to create_report"
-CMD view_report || DIE "Failed to view_report"
+if [ -n "bpn_flag" ]; then
+    CMD $find_bpn $param || DIE "Failed to run $find_bpn $param" 
+    CMD view_bpn || DIE "Failed to view_bpn"
+else
+    CMD $find_low $param || DIE "Failed to run $find_low $param" 
+    CMD $eval_bp -d $db || DIE "Failed to run $eval_bp -d $db"
+    CMD create_report || DIE "Failed to create_report"
+    CMD view_report || DIE "Failed to view_report"
+fi
 
 

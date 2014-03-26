@@ -221,6 +221,35 @@ int CBackData::get_latest_date()
     return date;
 }
 
+int CBackData::get_latest_date(int date)
+{
+    char buf[4096];
+    sqlite3_stmt* stmt;
+    snprintf(buf, sizeof(buf), "SELECT max(date) FROM dayline where date < '%d'", date);
+    SQL_ASSERT(sqlite3_prepare_v2(m_db, buf, strlen(buf), &stmt, NULL) == SQLITE_OK);
+    SQL_ASSERT(sqlite3_step(stmt) == SQLITE_ROW); //should be only one row
+
+    date = sqlite3_column_int(stmt, 0);
+    sqlite3_finalize(stmt);
+
+    return date;
+}
+
+bool CBackData::is_valid_date(int date)
+{
+    char buf[4096];
+    bool ret;
+    sqlite3_stmt* stmt;
+    snprintf(buf, sizeof(buf), "SELECT date FROM dayline where date = '%d'", date);
+    SQL_ASSERT(sqlite3_prepare_v2(m_db, buf, strlen(buf), &stmt, NULL) == SQLITE_OK);
+    ret = (sqlite3_step(stmt) == SQLITE_ROW);
+
+    sqlite3_finalize(stmt);
+
+    return ret;
+}
+
+
 int CBackData::get_latest_range(int date, int range)
 {
     char buf[4096];
@@ -316,6 +345,20 @@ void CBackData::reset_point()
 
 }
 
+void CBackData::reset_bpn()
+{
+    //drop table first
+    if (sql_stmt(m_db, "DROP TABLE IF EXISTS bpn"))
+        ASSERT("Failed to drop table point");
+
+    //then create table
+    if (sql_stmt(m_db, "CREATE TABLE bpn(sn INTEGER, date DATE, \
+        price INTEGER, count INTEGER, type INTEGER, coarse INTEGER, fine INTEGER)"))
+        ASSERT("Failed to create table point");
+
+}
+
+
 void CBackData::create_view_sp()
 {
     if (sql_stmt(m_db, "CREATE VIEW view_sp as select a.*, \
@@ -343,6 +386,18 @@ void CBackData::dump_point(point_t *p)
     if (sql_stmt(m_db, buf))
         ASSERT("dump_point failed:%s\n", buf);
 }
+
+void CBackData::dump_bpn(point_t *p)
+{
+    char buf[4096];
+    snprintf(buf, sizeof(buf),
+        "INSERT INTO bpn VALUES(%d, '%d', %d, %d, %d, %d, %d);",
+        p->sn, p->date, p->price, p->count, p->type, p->coarse, p->fine);
+
+    if (sql_stmt(m_db, buf))
+        ASSERT("dump_bpn failed:%s\n", buf);
+}
+
 
 void CBackData::get_point_sn(map<int/*sn*/, vector<point_t> > &sn_list)
 {

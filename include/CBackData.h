@@ -22,6 +22,7 @@ public:
     void get_trade_days(int stock_sn, int begin_date, int end_date, vector<struct day_price_t>& trade_days);
     void get_trade_days(int stock_sn, int begin_date, vector<struct day_price_t>& trade_days);
     int get_latest_date();
+    int get_latest_date(int date);
     int get_latest_range(int date, int range);
     int get_prev_date(int date);
     void get_all_sn(vector<int/*sn*/> &snlist);
@@ -32,12 +33,15 @@ public:
     void clear_point(point_t *p, day_price_t *dp, int policy);
     void short_point(point_t *p, day_price_t *dp, int policy, int count);
     void dump_point(point_t *p);
+    void dump_bpn(point_t *p);
     void reset_sp(point_t *p, int policy);
     void reset_point();
+    void reset_bpn();
     void reset_sp();
     void create_view_sp();
     void merge_sp_aux();
     void reset_sp_aux(point_t *p, int policy);
+    bool is_valid_date(int date);
 };
 
 #endif
