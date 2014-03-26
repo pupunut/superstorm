@@ -60,7 +60,7 @@ void eval_bp_single_3s(point_t *p, map<int/*date*/, day_price_t> *dp)
     }
 
     if (num < step)
-        lg_db->reset_sp(p, ENUM_SP_3S);
+        lg_db->reset_sp_aux(p, ENUM_SP_3S);
 
     return ;
 }
@@ -84,17 +84,17 @@ void eval_bp_single_xd(int xd, point_t *p, map<int/*date*/, day_price_t> *dp)
 
     int type;
     switch (xd){
+        case 2:
+            type = ENUM_SP_2D;
+            break;
         case 3:
             type = ENUM_SP_3D;
             break;
+        case 4:
+            type = ENUM_SP_4D;
+            break;
         case 5:
             type = ENUM_SP_5D;
-            break;
-        case 10:
-            type = ENUM_SP_10D;
-            break;
-        case 20:
-            type = ENUM_SP_20D;
             break;
         default:
             ASSERT("Unknown type:%d\n", xd);
@@ -131,10 +131,10 @@ void eval_bp_single(int sn, vector<point_t> &plist)
     foreach_itt(itt, &plist){
         point_t *p = &*itt;
         if (!lg_policy){//run with every policy
+            eval_bp_single_xd(2, p, &dayline);
             eval_bp_single_xd(3, p, &dayline);
+            eval_bp_single_xd(4, p, &dayline);
             eval_bp_single_xd(5, p, &dayline);
-            //eval_bp_single_xd(10, p, &dayline);
-            //eval_bp_single_xd(20, p, &dayline);
             eval_bp_single_3s(p, &dayline);
         }
     }
@@ -152,6 +152,9 @@ void eval_bp()
     foreach_itt(itt, &sn_list){
         eval_bp_single(itt->first, itt->second);
     }
+
+    //merge sp_aux
+    lg_db->merge_sp_aux();
 }
 
 CBackData *setup_db(int argc, char *argv[])

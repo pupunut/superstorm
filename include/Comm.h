@@ -151,11 +151,11 @@ typedef enum{
 }point_type_t;
 
 typedef enum{
-    ENUM_SP_NONE = 0,
+    ENUM_SP_NONE = 1,
+    ENUM_SP_2D,
     ENUM_SP_3D,
+    ENUM_SP_4D,
     ENUM_SP_5D,
-    ENUM_SP_10D,
-    ENUM_SP_20D,
     ENUM_SP_3S,
     ENUM_SP_SIZE
 }short_policy_t;

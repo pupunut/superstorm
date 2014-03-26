@@ -429,7 +429,7 @@ void CBackData::short_point(point_t *p, day_price_t *dp, int policy, int count)
     /* bpid, dpid, date, policy, count_percent, price, profit_percent */
     char buf[4096];
     snprintf(buf, sizeof(buf),
-        "INSERT INTO sp VALUES(%d, %d, '%d', %d, %d, %d, %d);",
+        "INSERT INTO sp_aux VALUES(%d, %d, '%d', %d, %d, %d, %d);",
         p->id, dp->id, dp->date, policy, count, dp->open, ((dp->open-p->price)*10000/p->price)*count/dp->count);
 
     p->curr_count -= count;
@@ -438,28 +438,44 @@ void CBackData::short_point(point_t *p, day_price_t *dp, int policy, int count)
         ASSERT("dump_point failed:%s\n", buf);
 }
 
-void CBackData::reset_sp(point_t *p, int policy)
+void CBackData::reset_sp_aux(point_t *p, int policy)
 {
     /* bpid, dpid, date, policy, count_percent, price, profit_percent */
     char buf[4096];
     snprintf(buf, sizeof(buf),
-        "DELETE FROM sp WHERE bpid=%d and policy=%d;", p->id, policy);
+        "DELETE FROM sp_aux WHERE bpid=%d and policy=%d;", p->id, policy);
 
     if (sql_stmt(m_db, buf))
-        ASSERT("reset sp failed:%s\n", buf);
+        ASSERT("reset sp_aux failed:%s\n", buf);
 }
+
+void CBackData::merge_sp_aux()
+{
+    /* bpid, dpid, date, policy, count_percent, price, profit_percent */
+    char buf[4096];
+    snprintf(buf, sizeof(buf), "%s", "INSERT INTO sp_aux SELECT a.bpid, a.dpid, a.date, a.policy, sum(a.cp), avg(a.price), avg(pp) FROM sp_aux as a group by a.bpid, a.policy;");
+
+    if (sql_stmt(m_db, buf))
+        ASSERT("reset sp_aux failed:%s\n", buf);
+}
+
 
 void CBackData::reset_sp()
 {
     //drop table first
     if (sql_stmt(m_db, "DROP TABLE IF EXISTS sp"))
         ASSERT("Failed to drop table sp");
+    if (sql_stmt(m_db, "DROP TABLE IF EXISTS sp_aux"))
+        ASSERT("Failed to drop table sp_aux");
     if (sql_stmt(m_db, "DROP VIEW IF EXISTS view_sp"))
         ASSERT("Failed to drop view view_sp");
 
     //then create table
     if (sql_stmt(m_db, "CREATE TABLE sp(bpid INTEGER, dpid INTEGER, date DATE, \
         policy INTEGER, cp INTERGE, price INTEGER, pp INTEGER)"))
-        ASSERT("Failed to create table point");
+        ASSERT("Failed to create table aux");
+    if (sql_stmt(m_db, "CREATE TABLE sp_aux(bpid INTEGER, dpid INTEGER, date DATE, \
+        policy INTEGER, cp INTERGE, price INTEGER, pp INTEGER)"))
+        ASSERT("Failed to create table sp_aux");
 }
 

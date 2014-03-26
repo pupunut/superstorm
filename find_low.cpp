@@ -158,14 +158,14 @@ void find_low_once(CBackData *db, int begin_date, int end_date, int day_range)
             continue;
         }
 
-        day_price_t *dp = &*dplist->begin();
-        point_t p(sn, end_date, dp->open, ENUM_PT_IN, ENUM_PPC_3DROP);
-        db->dump_point(&p);
+        //day_price_t *dp = &*dplist->begin();
+        //point_t p(sn, end_date, dp->open, ENUM_PT_IN, ENUM_PPC_3DROP);
+        //db->dump_point(&p);
 
         point_policy_t policy = filter_in_fine(ENUM_PPC_3DROP, *dplist);
         if (policy != ENUM_PP_SIZE){
             day_price_t *dp = &*dplist->begin();
-            point_t p(sn, end_date, dp->open, ENUM_PT_IN, ENUM_PPC_3DROP, policy);
+            point_t p(sn, dp->date, dp->open, ENUM_PT_IN, ENUM_PPC_3DROP, policy);
             db->dump_point(&p);
         }
     }
