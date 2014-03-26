@@ -176,6 +176,17 @@ enum{
     ENUM_BACKDATA_DB = 1
 };
 
+struct macd_t{
+    int date;
+    int di;
+    int ax;
+    int diax;
+    int dibx;
+    int dif;
+    int macd;
+    macd_t() {}
+};
+
 struct day_price_t{
     int id;
     int date;
@@ -185,6 +196,8 @@ struct day_price_t{
     int close;
     int count;
     int total;
+    //for macd
+    int macd;
 
     day_price_t()
     {
