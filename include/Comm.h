@@ -76,7 +76,7 @@ do {\
 
 #define ERROR(...) \
 do {\
-    fprintf(stderr, "ERROR: %s: ", __PRETTY_FUNCTION__);\
+    fprintf(stderr, "ERROR: %s:%d:", __PRETTY_FUNCTION__, __LINE__);\
     fprintf(stderr, __VA_ARGS__);\
 } while (0)
 

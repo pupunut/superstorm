@@ -378,7 +378,8 @@ void CBackData::get_point_sn(map<int/*sn*/, vector<point_t> > &sn_list)
 void CBackData::get_day_line(int sn, map<int/*date*/, day_price_t/*dp*/> &dplist)
 {
     char buf[4096];
-    snprintf(buf, sizeof(buf), "SELECT rowid, * FROM dayline WHERE sn=%d ORDER BY date ASC", sn);
+    //snprintf(buf, sizeof(buf), "SELECT rowid, * FROM dayline WHERE sn=%d ORDER BY date ASC", sn);
+    snprintf(buf, sizeof(buf), "SELECT rowid, * FROM dayline WHERE sn=%d", sn);
 
     sqlite3_stmt* stmt;
     SQL_ASSERT(sqlite3_prepare_v2(m_db, buf, strlen(buf), &stmt, NULL) == SQLITE_OK);
