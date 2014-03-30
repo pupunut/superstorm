@@ -22,6 +22,7 @@ EXE += drop_simulator
 EXE += find_low
 EXE += find_bpn
 EXE += eval_bp
+EXE += build_ma
 EXE_OBJ := $(addsuffix .oo, $(EXE))
 
 NON_EXE_OBJ := $(filter-out $(EXE_OBJ), $(OBJ))
@@ -31,6 +32,7 @@ drop_OBJ := $(NON_EXE_OBJ) drop_simulator.oo
 find_low_OBJ := $(NON_EXE_OBJ) find_low.oo
 find_bpn_OBJ := $(NON_EXE_OBJ) find_bpn.oo
 eval_bp_OBJ := $(NON_EXE_OBJ) eval_bp.oo
+build_ma_OBJ := $(NON_EXE_OBJ) build_ma.oo
 
 .PHONY: all install clean test
 
@@ -50,9 +52,12 @@ find_bpn: $(find_bpn_OBJ)
 
 eval_bp: $(eval_bp_OBJ)
 	$(CC) $(CFLAGS)  $(LDFLAGS) $^ -o $@
+	
+build_ma: $(build_ma_OBJ)
+	$(CC) $(CFLAGS)  $(LDFLAGS) $^ -o $@
 
 %.oo: %.cpp $(HEADERS)
 	$(CC) -c $(CFLAGS) $< -o $@ 
 
 clean:
-	-rm -f $(OBJ) $(EXE)
+	-rm -f $(OBJ) $(EXE) *.oo

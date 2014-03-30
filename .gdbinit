@@ -1,3 +1,3 @@
 
-b 121
-run run -d /mnt/hgfs/dayline/20140326/dayline.db
+#b _build_ma_single
+#run run -d /mnt/hgfs/dayline/0328/dayline.db -n5,10,50,200

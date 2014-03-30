@@ -58,13 +58,13 @@ do {\
 #ifdef _DEBUG
 #define INFO(...) \
 do {\
-    fprintf(stderr, "INFO: %s: ", __PRETTY_FUNCTION__);\
-    fprintf(stderr, __VA_ARGS__);\
+    fprintf(stdout, "INFO: %s: ", __PRETTY_FUNCTION__);\
+    fprintf(stdout, __VA_ARGS__);\
 } while (0)
 #else
 #define INFO(...) \
 do {\
-    fprintf(stderr, __VA_ARGS__);\
+    fprintf(stdout, __VA_ARGS__);\
 } while (0)
 #endif
 
@@ -185,6 +185,22 @@ struct macd_t{
     int dif;
     int macd;
     macd_t() {}
+};
+
+struct ma_t{
+    int id;
+    int sn;
+    int date;
+    int pma;
+    int avg;
+    ma_t(int id, int sn, int date, int pma, int avg)
+    {
+        this->id = id;
+        this->sn = sn;
+        this->date = date;
+        this->pma = pma;
+        this->avg = avg;
+    }
 };
 
 struct day_price_t{

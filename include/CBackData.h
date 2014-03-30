@@ -30,6 +30,7 @@ public:
     void get_day_line(int sn, map<int/*date*/, day_price_t/*dp*/> &dplist);
     void get_dp_desc(int sn, int begin_date, int end_date, vector<day_price_t> &dp_desc);
     void get_dp_desc(int begin, int end, map<int, vector<day_price_t> > &dp_desc);
+    void get_dp_desc(int sn, vector<day_price_t> &dp_desc);
     void clear_point(point_t *p, day_price_t *dp, int policy);
     void short_point(point_t *p, day_price_t *dp, int policy, int count);
     void dump_point(point_t *p);
@@ -38,10 +39,14 @@ public:
     void reset_point();
     void reset_bpn();
     void reset_sp();
+    void reset_ma();
     void create_view_sp();
     void merge_sp_aux();
     void reset_sp_aux(point_t *p, int policy);
     bool is_valid_date(int date);
+    void save_ma(int sn, int pma, map<int/*date*/, int/*avg*/> &ma);
+    void create_index_ma();
+    int get_last_pma_date(int sn, int pma);
 };
 
 #endif
