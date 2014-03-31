@@ -19,79 +19,8 @@ static int verbose_flag;
 static CBackData *lg_db = NULL;
 static vector<int/*param for ma*/> lg_pma_list;
 
-bool test_low_nrb(point_policy_coarse_t type, vector<day_price_t> &dp_desc)
+void _build_ma_single(int sn, int pma, vector<day_price_t> &dp_list, int last_pma_date, vector<ma_t> &ma_list)
 {
-    //(lastest -1) day is nrb
-    day_price_t *c = &dp_desc[0];
-    day_price_t *p = &dp_desc[1];
-
-    //the body of curr_dp is shadowed by priv_dp
-    //and the range of curr_dp is less than 1/2 of that of priv_dp
-    //for debug
-    if (c->get_range() >= (p->get_range()*0.67))
-        return false;
-
-    /*
-    if (c->get_body() >= p->get_body())
-        return false;
-    */
-
-    if (c->is_red()){ //red
-        if (c->high >= p->high || c->close <= p->close)
-            return false;
-    }else { //blue
-        if (c->high >= p->high || c->low <= p->low)
-        return false;
-    }
-
-    return true;
-}
-
-bool test_low_rb(point_policy_coarse_t type, vector<day_price_t> &dp_desc)
-{
-    //(lastest -1) day is nrb
-    day_price_t *c = &dp_desc[0];
-    day_price_t *p = &dp_desc[1];
-
-    //curr_dp is red
-    if (! c->is_red())
-        return false;
-
-    //curr_dp has very short top tail, NOTE: must be very very short
-    if (c->get_top_tail() >= c->get_body()/10)
-        return false;
-
-    //curr_dp has a long bottom tail
-    if (c->get_bottom_tail() <= c->get_body())
-        return false;
-
-    //open of curr_pd must less than open of prev_pd, cite: 002576 20140313
-    if (c->open >= p->open)
-        return false;
-
-
-    return true;
-}
-
-bool test_low_gap(point_policy_coarse_t type, vector<day_price_t> &dp_desc)
-{
-    return false; //TBD
-}
-
-bool test_low_md(point_policy_coarse_t type, vector<day_price_t> &dp_desc)
-{
-    return false; //TBD
-}
-
-void dump_bpn(int sn, day_price_t &dp, point_policy_t policy)
-{
-    point_t p(sn, dp.date, dp.open, ENUM_PT_IN, ENUM_PPC_NONE, policy);
-    lg_db->dump_bpn(&p);
-}
-
-void _build_ma_single(int sn, int pma, vector<day_price_t> &dp_list, int last_pma_date)
-{
-    map<int/*date*/, int/*avg*/> ma;
     for(int i = 0; (i+pma) <= dp_list.size(); i++){
         if (dp_list[i].date < last_pma_date) //already in db
             continue;
@@ -100,16 +29,17 @@ void _build_ma_single(int sn, int pma, vector<day_price_t> &dp_list, int last_pm
         for(int j = 0; j < pma; j++){
             sum += dp_list[i+j].close;
         }
-        ma[dp_list[i].date] = ((sum*10 / pma) + 5) / 10;
 
-        if (j > 30) //we only build ma in 30 trading days
+        int avg = ((sum*10 / pma) + 5) / 10;
+        ma_t ma(sn, dp_list[i].date, pma, avg);
+        ma_list.push_back(ma);
+
+        if (i > 30) //we only build ma in 30 trading days
             break;
     }
-
-    lg_db->save_ma(sn, pma, ma);
 }
 
-void build_ma_single(int sn, vector<int/*day line param*/> &pma_list)
+void build_ma_single(int sn, vector<int/*pma*/> &pma_list, vector<ma_t> &ma_list)
 {
     vector<day_price_t> dp_list;
     lg_db->get_dp_desc(sn, dp_list);
@@ -117,23 +47,24 @@ void build_ma_single(int sn, vector<int/*day line param*/> &pma_list)
     foreach_itt(itt, &pma_list){
         int pma = *itt;
         int last_pma_date = lg_db->get_last_pma_date(sn, pma);
-        _build_ma_single(sn, pma, dp_list, last_pma_date);
+        _build_ma_single(sn, pma, dp_list, last_pma_date, ma_list);
     }
 }
 
-void build_ma(vector<int/*day line param*/> &pma)
+void build_ma(vector<int/*day line param*/> &pma_list)
 {
 
     //get sn list
     vector<int/*sn*/> snlist;
     lg_db->get_all_sn(snlist);
 
+    map<int/*sn*/, vector<ma_t> >ma_map;
     foreach_itt(itt, &snlist){
         int sn = *itt;
-        build_ma_single(sn, pma);
+        build_ma_single(sn, pma_list, ma_map[sn]);
     }
 
-    lg_db->create_index_ma();
+    lg_db->dump_ma(ma_map);
 }
 
 CBackData *setup_db(int argc, char *argv[])

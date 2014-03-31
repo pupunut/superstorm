@@ -433,6 +433,31 @@ void CBackData::dump_bpn(point_t *p)
         ASSERT("dump_bpn failed:%s\n", buf);
 }
 
+void CBackData::dump_mabp(vector<mabp_t> &mabp_list)
+{
+    INFO("mabp_list size:%zd\n", mabp_list.size());
+    sql_stmt(m_db, "BEGIN TRANSACTION");
+    char buf[] = "INSERT INTO mabp VALUES(?1, ?2, ?3, ?4)";
+    sqlite3_stmt* stmt;
+    sqlite3_prepare_v2(m_db, buf, strlen(buf), &stmt, NULL);
+
+    foreach_itt(itt, &mabp_list){
+        mabp_t *mabp = &*itt;
+        snprintf(buf, sizeof(buf), "%d", mabp->date);
+        sqlite3_bind_int(stmt, 1, mabp->sn);
+        sqlite3_bind_text(stmt, 2, buf, strlen(buf), SQLITE_STATIC);
+        sqlite3_bind_int(stmt, 3, mabp->small_pma);
+        sqlite3_bind_int(stmt, 4, mabp->large_pma);
+
+        if (sqlite3_step(stmt) != SQLITE_DONE)
+            SQL_ASSERT(0);
+
+        sqlite3_reset(stmt);
+    }
+    sql_stmt(m_db, "COMMIT TRANSACTION");
+
+    sqlite3_finalize(stmt);
+}
 
 void CBackData::get_point_sn(map<int/*sn*/, vector<point_t> > &sn_list)
 {
@@ -511,7 +536,7 @@ void CBackData::clear_point(point_t *p, day_price_t *dp, int policy)
     THROW_ASSERT(dp->id);
     //INFO("found a clear point: %s\n", buf);
     if (sql_stmt(m_db, buf))
-        ASSERT("dump_point failed:%s\n", buf);
+        ASSERT("clear_point failed:%s\n", buf);
 }
 
 void CBackData::short_point(point_t *p, day_price_t *dp, int policy, int count)
@@ -525,7 +550,7 @@ void CBackData::short_point(point_t *p, day_price_t *dp, int policy, int count)
     p->curr_count -= count;
     //INFO("found a short point: %s\n", buf);
     if (sql_stmt(m_db, buf))
-        ASSERT("dump_point failed:%s\n", buf);
+        ASSERT("short_point failed:%s\n", buf);
 }
 
 void CBackData::reset_sp_aux(point_t *p, int policy)
@@ -569,32 +594,44 @@ void CBackData::reset_sp()
         ASSERT("Failed to create table sp_aux");
 }
 
-void CBackData::save_ma(int sn, int pma, map<int/*date*/, int/*avg*/> &ma)
+void CBackData::reset_mabp()
 {
-    INFO("sn:%d, pma:%d, count:%zd\n", sn, pma, ma.size());
+    //drop table first
+    SQL_ASSERT(!sql_stmt(m_db, "DROP TABLE IF EXISTS mabp"));
+
+    //then create table
+    SQL_ASSERT(!sql_stmt(m_db, "CREATE TABLE mabp(sn INTEGER, date DATE, \
+        small_pma INTEGER, large_pma INTERGE)"));
+}
+
+
+void CBackData::dump_ma(map<int/*sn*/, vector<ma_t> > &ma_map)
+{
     sql_stmt(m_db, "BEGIN TRANSACTION");
-    char buffer[] = "INSERT INTO ma VALUES(?1, ?2, ?3, ?4)";
+    char buf[] = "INSERT INTO ma VALUES(?1, ?2, ?3, ?4)";
     sqlite3_stmt* stmt;
-    sqlite3_prepare_v2(m_db, buffer, strlen(buffer), &stmt, NULL);
+    sqlite3_prepare_v2(m_db, buf, strlen(buf), &stmt, NULL);
 
-    int count = 0;
-    foreach_itt(itt, &ma){
-        snprintf(buffer, sizeof(buffer), "%d", itt->first);
-        int avg = itt->second;
+    foreach_itt(itt, &ma_map){
+        foreach_itt(itma, &itt->second){
+            ma_t *ma = &*itma;
+            snprintf(buf, sizeof(buf), "%d", ma->date);
+            sqlite3_bind_int(stmt, 1, ma->sn);
+            sqlite3_bind_text(stmt, 2, buf, strlen(buf), SQLITE_STATIC);
+            sqlite3_bind_int(stmt, 3, ma->pma);
+            sqlite3_bind_int(stmt, 4, ma->avg);
 
-        sqlite3_bind_int(stmt, 1, sn);
-        sqlite3_bind_text(stmt, 2, buffer, strlen(buffer), SQLITE_STATIC);
-        sqlite3_bind_int(stmt, 3, pma);
-        sqlite3_bind_int(stmt, 4, avg);
+            if (sqlite3_step(stmt) != SQLITE_DONE)
+                SQL_ASSERT(0);
 
-        if (sqlite3_step(stmt) != SQLITE_DONE)
-            SQL_ASSERT(0);
-
-        sqlite3_reset(stmt);
+            sqlite3_reset(stmt);
+        }
     }
     sql_stmt(m_db, "COMMIT TRANSACTION");
 
     sqlite3_finalize(stmt);
+
+    create_index_ma();
 }
 
 void CBackData::create_index_ma()
@@ -604,3 +641,37 @@ void CBackData::create_index_ma()
     if (sql_stmt(m_db, "CREATE INDEX IF NOT EXISTS uniq_ma ON ma (sn, date, pma)"))
         ASSERT("Failed to create table ma");
 }
+
+void CBackData::get_ma(int sn, map<int/*pma*/, vector<ma_t> > &ma_map)
+{
+    char buf[4096];
+    snprintf(buf, sizeof(buf), "SELECT rowid, * FROM ma WHERE sn=%d \
+            ORDER BY date DESC", sn);
+
+    sqlite3_stmt* stmt;
+    SQL_ASSERT(sqlite3_prepare_v2(m_db, buf, strlen(buf), &stmt, NULL) == SQLITE_OK);
+
+    int num = 0;
+    while(1){
+        int i = sqlite3_step(stmt);
+        if (i == SQLITE_ROW){
+            struct ma_t m(\
+                    sqlite3_column_int(stmt, 0), /*rowid,id*/ \
+                    sqlite3_column_int(stmt, 1), /*sn*/\
+                    atoi((const char *)sqlite3_column_text(stmt, 2)), /*date*/\
+                    sqlite3_column_int(stmt, 3), /*pma*/\
+                    sqlite3_column_int(stmt, 4)); /*avg*/
+
+            THROW_ASSERT(m.id);
+            ma_map[m.pma].push_back(m);
+        }else if(i == SQLITE_DONE){
+            break;
+        }else {
+            ASSERT("SQL Failed.\n");
+        }
+    }
+
+    sqlite3_finalize(stmt);
+}
+
+

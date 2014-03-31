@@ -19,89 +19,18 @@ static int verbose_flag;
 static CBackData *lg_db = NULL;
 static int lg_small_pma = 50, lg_large_pma = 200;
 
-bool test_low_nrb(point_policy_coarse_t type, vector<day_price_t> &dp_desc)
-{
-    //(lastest -1) day is nrb
-    day_price_t *c = &dp_desc[0];
-    day_price_t *p = &dp_desc[1];
-
-    //the body of curr_dp is shadowed by priv_dp
-    //and the range of curr_dp is less than 1/2 of that of priv_dp
-    //for debug
-    if (c->get_range() >= (p->get_range()*0.67))
-        return false;
-
-    /*
-    if (c->get_body() >= p->get_body())
-        return false;
-    */
-
-    if (c->is_red()){ //red
-        if (c->high >= p->high || c->close <= p->close)
-            return false;
-    }else { //blue
-        if (c->high >= p->high || c->low <= p->low)
-        return false;
-    }
-
-    return true;
-}
-
-bool test_low_rb(point_policy_coarse_t type, vector<day_price_t> &dp_desc)
-{
-    //(lastest -1) day is nrb
-    day_price_t *c = &dp_desc[0];
-    day_price_t *p = &dp_desc[1];
-
-    //curr_dp is red
-    if (! c->is_red())
-        return false;
-
-    //curr_dp has very short top tail, NOTE: must be very very short
-    if (c->get_top_tail() >= c->get_body()/10)
-        return false;
-
-    //curr_dp has a long bottom tail
-    if (c->get_bottom_tail() <= c->get_body())
-        return false;
-
-    //open of curr_pd must less than open of prev_pd, cite: 002576 20140313
-    if (c->open >= p->open)
-        return false;
-
-
-    return true;
-}
-
-bool test_low_gap(point_policy_coarse_t type, vector<day_price_t> &dp_desc)
-{
-    return false; //TBD
-}
-
-bool test_low_md(point_policy_coarse_t type, vector<day_price_t> &dp_desc)
-{
-    return false; //TBD
-}
-
-void dump_bpn(int sn, day_price_t &dp, point_policy_t policy)
-{
-    point_t p(sn, dp.date, dp.open, ENUM_PT_IN, ENUM_PPC_NONE, policy);
-    lg_db->dump_bpn(&p);
-}
-
-void find_mabp_single(int sn, int small_pma, int large_pma)
+void find_mabp_single(int sn, int small_pma, int large_pma, vector<mabp_t> &mabp_list)
 {
     map<int/*pma*/, vector<ma_t> >ma_map;
     int range = 30;//get and search ma_list in latest 30 trading days
-    ma_t mabp;
 
     //
-    lg_db->get_ma(sn, ma_list, range);
-    if (ma_map[small_pma].size() != range ||
-            ma_map[large_pma].size() != range){
+    lg_db->get_ma(sn, ma_map);
+    if (ma_map[small_pma].size() < range ||
+            ma_map[large_pma].size() < range){
         INFO("sn:%d small_pma:%d large_pma:%d range:%d not enough\n",
                 sn, small_pma, large_pma, range);
-        goto out;
+        return;
     }
 
     //test today's small_pma and large_pma
@@ -109,20 +38,20 @@ void find_mabp_single(int sn, int small_pma, int large_pma)
     vector<ma_t> *large_list = &ma_map[large_pma];
 
     //small_ma should higher than large_ma now
-    if ((*small_list)[0] < (*large_list)[0])
-        goto out;
+    ma_t *small_ma = &((*small_list)[0]);
+    ma_t *large_ma = &((*large_list)[0]);
+    if (small_ma->avg < large_ma->avg)
+        return;
 
     for (int i = 1; i < range; i++){
-        if ((*small_list)[i] < (*large_list)[i])
-
-            goto found;
+        small_ma = &((*small_list)[i]);
+        large_ma = &((*large_list)[i]);
+        if (small_ma->avg < large_ma->avg){
+            mabp_t mabp(sn, small_ma->date, small_pma, large_pma);
+            mabp_list.push_back(mabp);
+            return;
+        }
     }
-
-out:
-    return;
-
-found:
-    lg_db->dump_mabp(
 }
 
 void find_mabp(int small_pma, int large_pma)
@@ -132,10 +61,14 @@ void find_mabp(int small_pma, int large_pma)
     vector<int/*sn*/> snlist;
     lg_db->get_all_sn(snlist);
 
+    vector<mabp_t> mabp_list;
+
     foreach_itt(itt, &snlist){
         int sn = *itt;
-        find_mabp_single(sn, small_pma, large_pma);
+        find_mabp_single(sn, small_pma, large_pma, mabp_list);
     }
+
+    lg_db->dump_mabp(mabp_list);
 }
 
 CBackData *setup_db(int argc, char *argv[])
@@ -188,11 +121,11 @@ CBackData *setup_db(int argc, char *argv[])
                 break;
             case 's':
                 printf ("small pma: %s\n", optarg);
-                lg_small_pma = optarg;
+                lg_small_pma = atoi(optarg);
                 break;
             case 'l':
                 printf ("large pma: %s\n", optarg);
-                lg_large_pma = optarg;
+                lg_large_pma = atoi(optarg);
                 break;
             case '?':
                 /* getopt_long already printed an error message. */
@@ -219,7 +152,8 @@ CBackData *setup_db(int argc, char *argv[])
     }
 
     if (!db_path){
-        fprintf(stderr, "Usage: %s -d db_path -n num1,num2,num3...\n", argv[0]);
+        fprintf(stderr, "Usage: %s -d db_path [-s small_pma(default %d) -l large_pma(default %d)]\n",
+                argv[0], lg_small_pma, lg_large_pma);
         exit(-1);
     }
 

@@ -35,18 +35,21 @@ public:
     void short_point(point_t *p, day_price_t *dp, int policy, int count);
     void dump_point(point_t *p);
     void dump_bpn(point_t *p);
+    void dump_ma(map<int/*sn*/, vector<ma_t> > &ma_map);
+    void dump_mabp(vector<mabp_t> &mabp_list);
     void reset_sp(point_t *p, int policy);
     void reset_point();
     void reset_bpn();
     void reset_sp();
     void reset_ma();
+    void reset_mabp();
     void create_view_sp();
     void merge_sp_aux();
     void reset_sp_aux(point_t *p, int policy);
     bool is_valid_date(int date);
-    void save_ma(int sn, int pma, map<int/*date*/, int/*avg*/> &ma);
     void create_index_ma();
     int get_last_pma_date(int sn, int pma);
+    void get_ma(int sn, map<int/*pma*/, vector<ma_t> > &ma_map);
 };
 
 #endif

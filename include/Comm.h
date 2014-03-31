@@ -152,10 +152,10 @@ typedef enum{
 
 typedef enum{
     ENUM_SP_NONE = 1,
-    ENUM_SP_2D,
     ENUM_SP_3D,
-    ENUM_SP_4D,
     ENUM_SP_5D,
+    ENUM_SP_10D,
+    ENUM_SP_20D,
     ENUM_SP_3S,
     ENUM_SP_SIZE
 }short_policy_t;
@@ -201,6 +201,40 @@ struct ma_t{
         this->pma = pma;
         this->avg = avg;
     }
+
+    ma_t(int sn, int date, int pma, int avg)
+    {
+        this->sn = sn;
+        this->date = date;
+        this->pma = pma;
+        this->avg = avg;
+    }
+
+};
+
+struct mabp_t{
+    int id;
+    int sn;
+    int date;
+    int small_pma;
+    int large_pma;
+    mabp_t(int sn, int date, int small_pma, int large_pma)
+    {
+        this->sn = sn;
+        this->date = date;
+        this->small_pma = small_pma;
+        this->large_pma = large_pma;
+    }
+
+    mabp_t(int id, int sn, int date, int small_pma, int large_pma)
+    {
+        this->id = id;
+        this->sn = sn;
+        this->date = date;
+        this->small_pma = small_pma;
+        this->large_pma = large_pma;
+    }
+
 };
 
 struct day_price_t{

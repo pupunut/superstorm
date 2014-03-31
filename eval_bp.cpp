@@ -85,16 +85,16 @@ void eval_bp_single_xd(int xd, point_t *p, map<int/*date*/, day_price_t> *dp)
     int type;
     switch (xd){
         case 2:
-            type = ENUM_SP_2D;
-            break;
-        case 3:
             type = ENUM_SP_3D;
             break;
+        case 3:
+            type = ENUM_SP_5D;
+            break;
         case 4:
-            type = ENUM_SP_4D;
+            type = ENUM_SP_10D;
             break;
         case 5:
-            type = ENUM_SP_5D;
+            type = ENUM_SP_20D;
             break;
         default:
             ASSERT("Unknown type:%d\n", xd);
