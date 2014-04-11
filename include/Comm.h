@@ -212,6 +212,9 @@ struct ma_t{
 
 };
 
+struct ema_t : public ma_t{
+};
+
 struct mabp_t{
     int id;
     int sn;
