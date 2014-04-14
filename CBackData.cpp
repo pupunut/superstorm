@@ -295,6 +295,23 @@ int CBackData::get_last_pma_date(int sn, int pma)
     return date;
 }
 
+int CBackData::get_last_pema_date(int sn, int pema)
+{
+    int date = 0; //default last_pema_date
+    char buf[4096];
+    sqlite3_stmt* stmt;
+    snprintf(buf, sizeof(buf), "SELECT * from (SELECT max(date) as max FROM ema \
+        where sn=%d and pema=%d) as a where a.max IS NOT NULL",
+            sn, pema);
+    SQL_ASSERT(sqlite3_prepare_v2(m_db, buf, strlen(buf), &stmt, NULL) == SQLITE_OK);
+    if (sqlite3_step(stmt) == SQLITE_ROW)
+        date = atoi((const char *)sqlite3_column_text(stmt, 0));
+    sqlite3_finalize(stmt);
+
+    return date;
+}
+
+
 void CBackData::get_all_sn(vector<int/*sn*/> &snlist)
 {
     char buf[4096];
@@ -391,6 +408,17 @@ void CBackData::reset_ma()
     if (sql_stmt(m_db, "DROP INDEX IF EXISTS uniq_ma"))
         ASSERT("Failed to create table ma");
 }
+
+void CBackData::reset_ema()
+{
+    if (sql_stmt(m_db, "CREATE TABLE IF NOT EXISTS ema(sn INTEGER, date DATE, \
+        pema INTEGER, ema INTEGER)"))
+        ASSERT("Failed to create table ema");
+
+    if (sql_stmt(m_db, "DROP INDEX IF EXISTS uniq_ema"))
+        ASSERT("Failed to create index for table ema");
+}
+
 
 
 
@@ -634,13 +662,51 @@ void CBackData::dump_ma(map<int/*sn*/, vector<ma_t> > &ma_map)
     create_index_ma();
 }
 
+void CBackData::dump_ema(map<int/*sn*/, vector<ema_t> > &ema_map)
+{
+    sql_stmt(m_db, "BEGIN TRANSACTION");
+    char buf[] = "INSERT INTO ema VALUES(?1, ?2, ?3, ?4)";
+    sqlite3_stmt* stmt;
+    sqlite3_prepare_v2(m_db, buf, strlen(buf), &stmt, NULL);
+
+    foreach_itt(itt, &ema_map){
+        foreach_itt(itema, &itt->second){
+            ema_t *ema = &*itema;
+            snprintf(buf, sizeof(buf), "%d", ema->date);
+            sqlite3_bind_int(stmt, 1, ema->sn);
+            sqlite3_bind_text(stmt, 2, buf, strlen(buf), SQLITE_STATIC);
+            sqlite3_bind_int(stmt, 3, ema->pma);
+            sqlite3_bind_int(stmt, 4, ema->avg);
+
+            if (sqlite3_step(stmt) != SQLITE_DONE)
+                SQL_ASSERT(0);
+
+            sqlite3_reset(stmt);
+        }
+    }
+    sql_stmt(m_db, "COMMIT TRANSACTION");
+
+    sqlite3_finalize(stmt);
+
+    create_index_ema();
+}
+
 void CBackData::create_index_ma()
 {
     if (sql_stmt(m_db, "DROP INDEX IF EXISTS uniq_ma"))
-        ASSERT("Failed to create table ma");
+        ASSERT("Failed to create index for table ma");
     if (sql_stmt(m_db, "CREATE INDEX IF NOT EXISTS uniq_ma ON ma (sn, date, pma)"))
-        ASSERT("Failed to create table ma");
+        ASSERT("Failed to create index for table ma");
 }
+
+void CBackData::create_index_ema()
+{
+    if (sql_stmt(m_db, "DROP INDEX IF EXISTS uniq_ema"))
+        ASSERT("Failed to create index for table ema");
+    if (sql_stmt(m_db, "CREATE INDEX IF NOT EXISTS uniq_ema ON ema (sn, date, pema)"))
+        ASSERT("Failed to create index for table ema");
+}
+
 
 void CBackData::get_ma(int sn, map<int/*pma*/, vector<ma_t> > &ma_map)
 {

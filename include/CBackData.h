@@ -37,18 +37,22 @@ public:
     void dump_bpn(point_t *p);
     void dump_ma(map<int/*sn*/, vector<ma_t> > &ma_map);
     void dump_mabp(vector<mabp_t> &mabp_list);
+    void dump_ema(map<int/*sn*/, vector<ema_t> > &ema_map);
     void reset_sp(point_t *p, int policy);
     void reset_point();
     void reset_bpn();
     void reset_sp();
     void reset_ma();
+    void reset_ema();
     void reset_mabp();
     void create_view_sp();
     void merge_sp_aux();
     void reset_sp_aux(point_t *p, int policy);
     bool is_valid_date(int date);
     void create_index_ma();
+    void create_index_ema();
     int get_last_pma_date(int sn, int pma);
+    int get_last_pema_date(int sn, int pema);
     void get_ma(int sn, map<int/*pma*/, vector<ma_t> > &ma_map);
 };
 

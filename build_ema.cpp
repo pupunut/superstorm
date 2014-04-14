@@ -19,21 +19,26 @@ static int verbose_flag;
 static CBackData *lg_db = NULL;
 static vector<int/*param for ema*/> lg_pema_list;
 
-void _build_ema_single(int sn, int pema, vector<ma_t> &ma_list, int last_pema_date, vector<ema_t> &ema_list)
+void _build_ema_single(int sn, int pema, vector<day_price_t> &dp_list, int last_pema_date, vector<ema_t> &ema_list)
 {
-    for(int i = 0; (i+pema) <= ma_list.size(); i++){
-        if (ma_list[i].date < last_pema_date) //already in db
+    //compute for every valid day
+    for(int i = 0; (i+pema) <= dp_list.size(); i++){
+        if (dp_list[i].date < last_pema_date) //already in db
             continue;
 
         //assume ma_list in DESC order
+        //compute ema for this day: ma[i]
         int sum = 0;
-        for(int j = 0; j < pema; j++){
-            sum += ma_list[i+j].avg;
+        int value = 0;
+        for (int j = pema; j; j--){
+            sum += j;
+            value += dp_list[i+pema-j].close * j;
         }
 
-        int avg = ((sum*10 / pma) + 5) / 10;
-        ma_t ma(sn, dp_list[i].date, pma, avg);
-        ma_list.push_back(ma);
+        value = (value*10 / sum + 5) / 10;
+
+        ema_t ema(sn, dp_list[i].date, pema, value);
+        ema_list.push_back(ema);
 
         if (i > 30) //we only build ma in 30 trading days
             break;
@@ -42,13 +47,13 @@ void _build_ema_single(int sn, int pema, vector<ma_t> &ma_list, int last_pema_da
 
 void build_ema_single(int sn, vector<int/*pema*/> &pema_list, vector<ema_t> &ema_list)
 {
-    vector<ma_t> ma_list;
-    lg_db->get_ma(sn, ma_list);
+    vector<day_price_t> dp_list;
+    lg_db->get_dp_desc(sn, dp_list);
 
-    foreach_itt(itt, &pma_list){
+    foreach_itt(itt, &pema_list){
         int pema = *itt;
         int last_pema_date = lg_db->get_last_pema_date(sn, pema);
-        _build_ema_single(sn, pema, ma_list, last_pema_date, ema_list);
+        _build_ema_single(sn, pema, dp_list, last_pema_date, ema_list);
     }
 }
 
@@ -119,8 +124,8 @@ CBackData *setup_db(int argc, char *argv[])
                 printf ("target ema: %s\n", optarg);
                 result = strtok(optarg, delims);
                 while (result != NULL){
-                    printf( "dl is \"%d\"\n", atoi(result));
-                    lg_pma_list.push_back(atoi(result));
+                    printf( "pema is \"%d\"\n", atoi(result));
+                    lg_pema_list.push_back(atoi(result));
                     result = strtok(NULL, delims);
                 }
                 break;
@@ -148,7 +153,7 @@ CBackData *setup_db(int argc, char *argv[])
         putchar ('\n');
     }
 
-    if (!db_path || !lg_pma_list.size()){
+    if (!db_path || !lg_pema_list.size()){
         fprintf(stderr, "Usage: %s -d db_path -n num1,num2,num3...\n", argv[0]);
         exit(-1);
     }

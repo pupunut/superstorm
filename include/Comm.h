@@ -213,6 +213,12 @@ struct ma_t{
 };
 
 struct ema_t : public ma_t{
+    ema_t(int sn, int date, int pma, int avg)
+        :ma_t(sn, date, pma, avg)
+    {
+    }
+
+
 };
 
 struct mabp_t{
