@@ -311,6 +311,19 @@ int CBackData::get_last_pema_date(int sn, int pema)
     return date;
 }
 
+int CBackData::get_last_pdea_date(int sn)
+{
+    int date = 0; //default last_pema_date
+    char buf[4096];
+    sqlite3_stmt* stmt;
+    snprintf(buf, sizeof(buf), "SELECT date FROM macd WHERE sn=%d", sn);
+    SQL_ASSERT(sqlite3_prepare_v2(m_db, buf, strlen(buf), &stmt, NULL) == SQLITE_OK);
+    if (sqlite3_step(stmt) == SQLITE_ROW)
+        date = sqlite3_column_int(stmt, 0);
+    sqlite3_finalize(stmt);
+
+    return date;
+}
 
 void CBackData::get_all_sn(vector<int/*sn*/> &snlist)
 {
@@ -416,11 +429,18 @@ void CBackData::reset_ema()
         ASSERT("Failed to create table ema");
 
     if (sql_stmt(m_db, "DROP INDEX IF EXISTS uniq_ema"))
-        ASSERT("Failed to create index for table ema");
+        ASSERT("Failed to create unique index for table ema");
 }
 
+void CBackData::reset_macd()
+{
+    if (sql_stmt(m_db, "CREATE TABLE IF NOT EXISTS macd(sn INTEGER, date DATE, \
+        diff INTEGER, dea INTEGER, macd INTEGER)"))
+        ASSERT("Failed to create table macd");
 
-
+    if (sql_stmt(m_db, "CREATE UNIQUE INDEX IF NOT EXISTS uniq_macd on macd(sn, date)"))
+        ASSERT("Failed to create unique index for table macd");
+}
 
 void CBackData::create_view_sp()
 {
@@ -691,6 +711,33 @@ void CBackData::dump_ema(map<int/*sn*/, vector<ema_t> > &ema_map)
     create_index_ema();
 }
 
+void CBackData::dump_macd(map<int/*sn*/, vector<macd_t> > &macd_map)
+{
+    sql_stmt(m_db, "BEGIN TRANSACTION");
+    char buf[] = "UPDATE macd SET dea=?1, macd=?2 WHERE sn=?3 AND date=?4";
+    sqlite3_stmt* stmt;
+    sqlite3_prepare_v2(m_db, buf, strlen(buf), &stmt, NULL);
+
+    foreach_itt(itt, &macd_map){
+        foreach_itt(itm, &itt->second){
+            macd_t *macd = &*itm;
+            snprintf(buf, sizeof(buf), "%d", macd->date);
+            sqlite3_bind_int(stmt, 1, macd->dea);
+            sqlite3_bind_int(stmt, 2, macd->macd);
+            sqlite3_bind_int(stmt, 3, macd->sn);
+            sqlite3_bind_text(stmt, 4, buf, strlen(buf), SQLITE_STATIC);
+
+            if (sqlite3_step(stmt) != SQLITE_DONE)
+                SQL_ASSERT(0);
+
+            sqlite3_reset(stmt);
+        }
+    }
+    sql_stmt(m_db, "COMMIT TRANSACTION");
+
+    sqlite3_finalize(stmt);
+}
+
 void CBackData::create_index_ma()
 {
     if (sql_stmt(m_db, "DROP INDEX IF EXISTS uniq_ma"))
@@ -706,7 +753,6 @@ void CBackData::create_index_ema()
     if (sql_stmt(m_db, "CREATE INDEX IF NOT EXISTS uniq_ema ON ema (sn, date, pema)"))
         ASSERT("Failed to create index for table ema");
 }
-
 
 void CBackData::get_ma(int sn, map<int/*pma*/, vector<ma_t> > &ma_map)
 {
@@ -739,5 +785,45 @@ void CBackData::get_ma(int sn, map<int/*pma*/, vector<ma_t> > &ma_map)
 
     sqlite3_finalize(stmt);
 }
+
+void CBackData::get_macd(map<int/*sn*/, vector<macd_t> > &macd_map)
+{
+    char buf[4096];
+    snprintf(buf, sizeof(buf), "SELECT rowid, * FROM macd ORDER BY sn, date DESC");
+
+    sqlite3_stmt* stmt;
+    SQL_ASSERT(sqlite3_prepare_v2(m_db, buf, strlen(buf), &stmt, NULL) == SQLITE_OK);
+
+    int num = 0;
+    while(1){
+        int i = sqlite3_step(stmt);
+        if (i == SQLITE_ROW){
+            struct macd_t m(\
+                    sqlite3_column_int(stmt, 0), /*rowid,id*/ \
+                    sqlite3_column_int(stmt, 1), /*sn*/\
+                    atoi((const char *)sqlite3_column_text(stmt, 2)), /*date*/\
+                    sqlite3_column_int(stmt, 3), /*diff*/\
+                    sqlite3_column_int(stmt, 4), /*dea*/
+                    sqlite3_column_int(stmt, 5)); /*macd*/
+
+            THROW_ASSERT(m.id);
+            macd_map[m.sn].push_back(m);
+        }else if(i == SQLITE_DONE){
+            break;
+        }else {
+            ASSERT("SQL Failed.\n");
+        }
+    }
+
+    sqlite3_finalize(stmt);
+}
+
+
+void CBackData::build_diff(void)
+{
+    if (sql_stmt(m_db, "insert or ignore into macd select a.sn as sn, a.date as date, a.ema-b.ema as diff, 0, 0 from ema as a join ema as b on a.sn=b.sn and a.date=b.date and a.pema != b.pema"))
+        ASSERT("Failed to insert into table macd");
+}
+
 
 

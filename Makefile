@@ -24,7 +24,7 @@ EXE += find_bpn
 EXE += eval_bp
 EXE += find_mabp
 EXE += build_ma
-EXE += build_ema
+EXE += build_macd
 EXE_OBJ := $(addsuffix .oo, $(EXE))
 
 NON_EXE_OBJ := $(filter-out $(EXE_OBJ), $(OBJ))
@@ -36,7 +36,7 @@ find_bpn_OBJ := $(NON_EXE_OBJ) find_bpn.oo
 eval_bp_OBJ := $(NON_EXE_OBJ) eval_bp.oo
 find_mabp_OBJ := $(NON_EXE_OBJ) find_mabp.oo
 build_ma_OBJ := $(NON_EXE_OBJ) build_ma.oo
-build_ema_OBJ := $(NON_EXE_OBJ) build_ema.oo
+build_macd_OBJ := $(NON_EXE_OBJ) build_macd.oo
 
 .PHONY: all install clean test
 
@@ -63,7 +63,7 @@ find_mabp: $(find_mabp_OBJ)
 build_ma: $(build_ma_OBJ)
 	$(CC) $(CFLAGS)  $(LDFLAGS) $^ -o $@
 
-build_ema: $(build_ema_OBJ)
+build_macd: $(build_macd_OBJ)
 	$(CC) $(CFLAGS)  $(LDFLAGS) $^ -o $@
 
 %.oo: %.cpp $(HEADERS)

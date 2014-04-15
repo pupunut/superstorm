@@ -18,6 +18,7 @@ using namespace std;
 static int verbose_flag;
 static CBackData *lg_db = NULL;
 static vector<int/*param for ema*/> lg_pema_list;
+static vector<int/*param for dea*/> lg_pdea_list;
 
 void _build_ema_single(int sn, int pema, vector<day_price_t> &dp_list, int last_pema_date, vector<ema_t> &ema_list)
 {
@@ -59,18 +60,106 @@ void build_ema_single(int sn, vector<int/*pema*/> &pema_list, vector<ema_t> &ema
 
 void build_ema(vector<int/*ema param*/> &pema_list)
 {
-
     //get sn list
     vector<int/*sn*/> snlist;
     lg_db->get_all_sn(snlist);
 
+    INFO("Begin Build EMA\n");
     map<int/*sn*/, vector<ema_t> >ema_map;
+    int total = snlist.size();
+    int num_print = total / 10;
+    int count = 0;
     foreach_itt(itt, &snlist){
         int sn = *itt;
         build_ema_single(sn, pema_list, ema_map[sn]);
+        if (!(++count % num_print))
+            fprintf(stderr, "Build EMA No.%d/%d\r", count, total);
     }
+    INFO("End Build EMA No.%d/%d\n", count, total);
 
+    INFO("Dump EMA...\n");
     lg_db->dump_ema(ema_map);
+}
+
+void _build_macd(map<int/*sn*/, vector<macd_t> > &macd_map)
+{
+    foreach_itt(itt, &macd_map){
+        foreach_itt(itm, &itt->second){
+            macd_t *macd = &*itm;
+            macd->macd = macd->diff - macd->dea;
+        }
+    }
+}
+
+void _build_dea_single(int sn, int pdea, int last_pdea_date, vector<macd_t> &macd_list)
+{
+    //compute for every valid day
+    for(int i = 0; (i+pdea) <= macd_list.size(); i++){
+        if (macd_list[i].date < last_pdea_date) //already in db
+            continue;
+
+        //assume ma_list in DESC order
+        //compute dea for this day: ma[i]
+        int sum = 0;
+        int value = 0;
+        for (int j = pdea; j; j--){
+            sum += j;
+            value += macd_list[i+pdea-j].diff * j;
+        }
+
+        value = (value*10 / sum + 5) / 10;
+        macd_list[i].dea = value;
+
+        if (i > 30) //we only build ma in 30 trading days
+            break;
+    }
+}
+
+void build_dea_single(int sn, vector<int/*pdea*/> &pdea_list, vector<macd_t> &macd_list)
+{
+    foreach_itt(itt, &pdea_list){
+        int pdea = *itt;
+        int last_pdea_date = lg_db->get_last_pdea_date(sn);
+        if (!last_pdea_date)
+            continue; //no this diff data about this sn in table macd
+        _build_dea_single(sn, pdea, last_pdea_date, macd_list);
+    }
+}
+
+
+void build_macd(vector<int/*dea param*/> &pdea_list)
+{
+    INFO("Reset macd\n");
+    lg_db->reset_macd();
+
+    INFO("Build DIFF\n");
+    lg_db->build_diff();
+
+    INFO("Begin Build DEA\n");
+    //get sn list
+    vector<int/*sn*/> snlist;
+    lg_db->get_all_sn(snlist);
+
+    //get diff
+    map<int/*sn*/, vector<macd_t> >macd_map;
+    lg_db->get_macd(macd_map);
+
+    int total = snlist.size();
+    int num_print = total / 10;
+    int count = 0;
+    foreach_itt(itt, &snlist){
+        int sn = *itt;
+        build_dea_single(sn, pdea_list, macd_map[sn]);
+        if (!(++count % num_print))
+            fprintf(stderr, "Build DEA No.%d/%d\r", count, total);
+    }
+    INFO("End Build DEA No.%d/%d\n", count, total);
+
+    INFO("Build MACD\n");
+    _build_macd(macd_map);
+
+    INFO("Dump MACD...\n");
+    lg_db->dump_macd(macd_map);
 }
 
 CBackData *setup_db(int argc, char *argv[])
@@ -92,13 +181,12 @@ CBackData *setup_db(int argc, char *argv[])
             /* These options don't set a flag.
                We distinguish them by their indices. */
             {"db",    required_argument, 0, 'd'},
-            {"ema",  required_argument, 0, 'n'},
             {0, 0, 0, 0}
         };
         /* getopt_long stores the option index here. */
         int option_index = 0;
 
-        c = getopt_long (argc, argv, "d:n:",
+        c = getopt_long (argc, argv, "d:",
                 long_options, &option_index);
 
         /* Detect the end of the options. */
@@ -119,15 +207,6 @@ CBackData *setup_db(int argc, char *argv[])
             case 'd':
                 printf ("database: %s\n", optarg);
                 db_path = optarg;
-                break;
-            case 'n':
-                printf ("target ema: %s\n", optarg);
-                result = strtok(optarg, delims);
-                while (result != NULL){
-                    printf( "pema is \"%d\"\n", atoi(result));
-                    lg_pema_list.push_back(atoi(result));
-                    result = strtok(NULL, delims);
-                }
                 break;
             case '?':
                 /* getopt_long already printed an error message. */
@@ -153,8 +232,8 @@ CBackData *setup_db(int argc, char *argv[])
         putchar ('\n');
     }
 
-    if (!db_path || !lg_pema_list.size()){
-        fprintf(stderr, "Usage: %s -d db_path -n num1,num2,num3...\n", argv[0]);
+    if (!db_path){
+        fprintf(stderr, "Usage: %s -d db_path\n", argv[0]);
         exit(-1);
     }
 
@@ -174,5 +253,10 @@ int main (int argc, char **argv)
         lg_pema_list.push_back(26);
     }
 
-    build_ema(lg_pema_list);
+//    build_ema(lg_pema_list);
+
+    if (lg_pema_list.size() == 2 && lg_pema_list[0] == 12 && lg_pema_list[1] == 26){
+        lg_pdea_list.push_back(9);
+        build_macd(lg_pdea_list);
+    }
 }

@@ -31,6 +31,7 @@ public:
     void get_dp_desc(int sn, int begin_date, int end_date, vector<day_price_t> &dp_desc);
     void get_dp_desc(int begin, int end, map<int, vector<day_price_t> > &dp_desc);
     void get_dp_desc(int sn, vector<day_price_t> &dp_desc);
+    void get_macd(map<int/*sn*/, vector<macd_t> > &macd_map);
     void clear_point(point_t *p, day_price_t *dp, int policy);
     void short_point(point_t *p, day_price_t *dp, int policy, int count);
     void dump_point(point_t *p);
@@ -38,6 +39,7 @@ public:
     void dump_ma(map<int/*sn*/, vector<ma_t> > &ma_map);
     void dump_mabp(vector<mabp_t> &mabp_list);
     void dump_ema(map<int/*sn*/, vector<ema_t> > &ema_map);
+    void dump_macd(map<int/*sn*/, vector<macd_t> > &macd_map);
     void reset_sp(point_t *p, int policy);
     void reset_point();
     void reset_bpn();
@@ -45,6 +47,7 @@ public:
     void reset_ma();
     void reset_ema();
     void reset_mabp();
+    void reset_macd();
     void create_view_sp();
     void merge_sp_aux();
     void reset_sp_aux(point_t *p, int policy);
@@ -53,7 +56,9 @@ public:
     void create_index_ema();
     int get_last_pma_date(int sn, int pma);
     int get_last_pema_date(int sn, int pema);
+    int get_last_pdea_date(int sn);
     void get_ma(int sn, map<int/*pma*/, vector<ma_t> > &ma_map);
+    void build_diff();
 };
 
 #endif

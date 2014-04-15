@@ -177,14 +177,31 @@ enum{
 };
 
 struct macd_t{
+    int id;
+    int sn;
     int date;
-    int di;
-    int ax;
-    int diax;
-    int dibx;
-    int dif;
+    int diff;
+    int dea;
     int macd;
-    macd_t() {}
+    macd_t(int sn, int date, int diff, int dea, int macd)
+    {
+        this->sn = sn;
+        this->date = date;
+        this->diff = diff;
+        this->dea = dea;
+        this->macd = macd;
+    }
+
+    macd_t(int id, int sn, int date, int diff, int dea, int macd)
+    {
+        this->id = id;
+        this->sn = sn;
+        this->date = date;
+        this->diff = diff;
+        this->dea = dea;
+        this->macd = macd;
+    }
+
 };
 
 struct ma_t{
